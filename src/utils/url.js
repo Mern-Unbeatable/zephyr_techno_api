@@ -13,7 +13,7 @@ export const buildImageUrl = (filePath) => {
   
   if (env.nodeEnv === 'production') {
     // Assuming you have a LIVE_URL in env, otherwise fallback to a default production URL
-    const baseUrl = process.env.LIVE_URL || 'https://api-zephyr-techno.maktechgroup.tech';
+    const baseUrl = process.env.LIVE_URL || 'https://api.zephyrtechnology.co.uk';
     return `${baseUrl}/${normalizedPath}`;
   } else {
     return `http://localhost:${env.port}/${normalizedPath}`;

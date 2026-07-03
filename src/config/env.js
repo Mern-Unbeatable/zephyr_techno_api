@@ -8,9 +8,22 @@ for (const key of REQUIRED_VARS) {
   }
 }
 
+const defaultCorsOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://zephyr-techno.maktechgroup.tech',
+  'https://zephyrtechnology.co.uk',
+  'https://www.zephyrtechnology.co.uk',
+];
+
+const corsOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
+  : defaultCorsOrigins;
+
 const env = {
   port: process.env.PORT || 3000,
   nodeEnv: process.env.NODE_ENV || 'development',
+  corsOrigins,
   databaseUrl: process.env.DATABASE_URL,
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '1d',

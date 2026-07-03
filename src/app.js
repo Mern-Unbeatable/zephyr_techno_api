@@ -47,12 +47,18 @@ app.get('/uploads/email-icons/:filename', (req, res) => {
   res.sendFile(filePath);
 });
 
-// CORS configuration
+// CORS configuration (see CORS_ORIGINS in .env)
 const corsOptions = {
-  origin: ['http://localhost:5173', 'https://zephyr-techno.maktechgroup.tech'],
+  origin: (origin, callback) => {
+    if (!origin || env.corsOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(null, false);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
 };
 app.use(cors(corsOptions));
 
