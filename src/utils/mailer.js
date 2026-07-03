@@ -1,7 +1,6 @@
 import nodemailer from 'nodemailer';
 import AppError from './app-error.js';
 import env from '../config/env.js';
-import { wrapEmailHtml, getSignatureIconAttachments } from './email-signature.js';
 
 class Mailer {
   constructor() {
@@ -48,7 +47,7 @@ class Mailer {
       </div>
     `;
 
-    return { html: wrapEmailHtml(body), text };
+    return { html: this.#wrapPlainHtml(body), text };
   }
 
   async #sendMail({ to, subject, html, text, replyTo, attachments = [] }) {
@@ -64,10 +63,6 @@ class Mailer {
     });
   }
 
-  #signatureAttachments() {
-    return getSignatureIconAttachments();
-  }
-
   async sendEmailVerificationOtp({ to, otp, recipientName }) {
     const { html, text } = this.#buildOtpMessage('Email Verification', otp, 'email verification', recipientName);
     return this.#sendMail({
@@ -75,7 +70,6 @@ class Mailer {
       subject: 'Verify your email address',
       html,
       text,
-      attachments: this.#signatureAttachments(),
     });
   }
 
@@ -86,7 +80,6 @@ class Mailer {
       subject: 'Password reset OTP',
       html,
       text,
-      attachments: this.#signatureAttachments(),
     });
   }
 
