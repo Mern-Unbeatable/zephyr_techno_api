@@ -14,6 +14,8 @@
     "postinstall": "prisma generate && node scripts/sync-email-icons.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "db:migrate-full": "node scripts/migrate-database.js",
+    "db:verify": "node scripts/verify-database.js",
     "prisma:studio": "prisma studio",
     "test:email-signature": "node scripts/sync-email-icons.js && node scripts/test-email-signature.js",
     "generate:email-icons": "node scripts/generate-email-icons.js && node scripts/sync-email-icons.js",
