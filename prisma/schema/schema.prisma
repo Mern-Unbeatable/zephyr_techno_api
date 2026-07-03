@@ -1,0 +1,649 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =====================================================================================
+// ENUMS
+// =====================================================================================
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum ProductListingStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  PAID
+  FAILED
+}
+
+enum PaymentMethod {
+  STRIPE
+}
+
+/// DiscountType: indicates whether the promo discount is a percentage or a fixed amount
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum SellStatus {
+  SUBMITTED
+  RECEIVED
+  INSPECTION
+  OFFER_MADE
+  PAID
+  REJECTED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ContactStatus {
+  NEW
+  PENDING
+  CONTRACTED
+}
+
+enum BusinessFormStatus {
+  NEW
+  CONTACTED
+  CLOSED
+}
+
+// =====================================================================================
+// CORE PLATFORM ENTITIES
+// =====================================================================================
+
+model User {
+  id                            String     @id @default(uuid())
+  email                         String     @unique
+  passwordHash                  String
+  firstName                     String
+  lastName                      String
+  phone                         String?
+  isEmailVerified               Boolean    @default(false)
+  emailVerifiedAt               DateTime?
+  emailVerificationOtpHash      String?
+  emailVerificationOtpExpiresAt DateTime?
+  passwordResetOtpHash          String?
+  passwordResetOtpExpiresAt     DateTime?
+  passwordResetOtpVerifiedAt    DateTime?
+  role                          UserRole   @default(CUSTOMER)
+  status                        UserStatus @default(ACTIVE)
+  createdAt                     DateTime   @default(now())
+  updatedAt                     DateTime   @updatedAt
+
+  userAddresses UserAddress[]
+  cart          Cart?
+  orders        Order[]
+  reviews       Review[]
+  sellRequests  SellRequest[]
+  isDeleted     Boolean       @default(false)
+  deletedAt     DateTime?
+}
+
+model UserAddress {
+  id        String   @id @default(uuid())
+  fullName  String
+  phone     String?
+  street    String
+  city      String
+  state     String?
+  zipCode   String
+  country   String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders    Order[]   @relation("OrderAddress")
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  @@index([userId])
+}
+
+// =====================================================================================
+// ADMIN MANAGED LOOKUPS & ATTRIBUTES
+// =====================================================================================
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  products  Product[]
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+}
+
+model Series {
+  id                    String                  @id @default(uuid())
+  name                  String                  @unique
+  image                 String? // Image file path/name
+  models                DeviceModel[]
+  products              Product[]
+  promoCodeSeriesBridge PromoCodeSeriesBridge[]
+  isDeleted             Boolean                 @default(false)
+  deletedAt             DateTime?
+}
+
+model DeviceModel {
+  id                   String                 @id @default(uuid())
+  name                 String                 @unique
+  seriesId             String
+  series               Series                 @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  products             Product[]
+  promoCodeModelBridge PromoCodeModelBridge[]
+  createdAt            DateTime               @default(now())
+  isDeleted            Boolean                @default(false)
+  deletedAt            DateTime?
+  conditionModelPrices ConditionModelPrice[]
+  sellRequests         SellRequest[]
+
+  @@index([seriesId])
+}
+
+model Condition {
+  id                   String                @id @default(uuid())
+  name                 String                @unique
+  basePrice            Decimal               @default(0) @db.Decimal(12, 2)
+  products             Product[]
+  sellRequests         SellRequest[]
+  isDeleted            Boolean               @default(false)
+  deletedAt            DateTime?
+  createdAt            DateTime              @default(now())
+  conditionModelPrices ConditionModelPrice[]
+
+  @@index([name])
+}
+
+// Per-model condition prices (overrides Condition.basePrice)
+model ConditionModelPrice {
+  id            String    @id @default(uuid())
+  conditionId   String
+  deviceModelId String
+  price         Decimal   @db.Decimal(12, 2)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  isDeleted     Boolean   @default(false)
+  deletedAt     DateTime?
+
+  condition   Condition   @relation(fields: [conditionId], references: [id], onDelete: Cascade)
+  deviceModel DeviceModel @relation(fields: [deviceModelId], references: [id], onDelete: Cascade)
+
+  @@unique([conditionId, deviceModelId])
+  @@index([conditionId])
+  @@index([deviceModelId])
+  @@index([isDeleted])
+}
+
+model Color {
+  id               String           @id @default(uuid())
+  name             String           @unique
+  hexCode          String?
+  products         ProductColor[]
+  productGalleries ProductGallery[]
+  cartItems        CartItem[]
+  orderItems       OrderItem[]
+  isDeleted        Boolean          @default(false)
+  deletedAt        DateTime?
+}
+
+model StorageOption {
+  id         String                 @id @default(uuid())
+  name       String                 @unique
+  products   ProductStorageOption[]
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+  isDeleted  Boolean                @default(false)
+  deletedAt  DateTime?
+}
+
+model RamOption {
+  id         String             @id @default(uuid())
+  name       String             @unique
+  products   ProductRamOption[]
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+  isDeleted  Boolean            @default(false)
+  deletedAt  DateTime?
+}
+
+// =====================================================================================
+// PRODUCT & INVENTORY SYSTEM
+// =====================================================================================
+
+model Product {
+  id            String               @id @default(uuid())
+  title         String
+  description   String
+  introduction  String?
+  basePrice     Decimal              @db.Decimal(12, 2)
+  stockQuantity Int                  @default(0)
+  isFeatured    Boolean              @default(false)
+  featuredAt    DateTime?
+  listingStatus ProductListingStatus @default(INACTIVE)
+
+  categoryId    String
+  seriesId      String
+  deviceModelId String
+  conditionId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  category    Category    @relation(fields: [categoryId], references: [id])
+  series      Series      @relation(fields: [seriesId], references: [id])
+  deviceModel DeviceModel @relation(fields: [deviceModelId], references: [id])
+  condition   Condition?  @relation(fields: [conditionId], references: [id])
+
+  productGalleries ProductGallery[]
+  productFaqs      ProductFaq[]
+  highlights       ProductHighlight[]
+  specifications   ProductSpecification[]
+  includedItems    ProductIncludedItem[]
+  reviews          Review[]
+  colors           ProductColor[]
+  storageOptions   ProductStorageOption[]
+  ramOptions       ProductRamOption[]
+  cartItems        CartItem[]
+  orderItems       OrderItem[]
+  isDeleted        Boolean                @default(false)
+  deletedAt        DateTime?
+
+  @@index([categoryId])
+  @@index([seriesId])
+  @@index([deviceModelId])
+  @@index([conditionId])
+  @@index([listingStatus])
+  @@index([isDeleted]) // Index for soft-delete filter
+  @@index([categoryId, listingStatus, isDeleted]) // Composite index for common filter queries
+  @@index([createdAt(sort: Desc)]) // Index for sorting by newest
+}
+
+model ContactMessage {
+  id        String        @id @default(uuid())
+  firstName String
+  email     String
+  subject   String
+  phone     String
+  message   String
+  status    ContactStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  isDeleted Boolean       @default(false)
+  deletedAt DateTime?
+
+  @@index([createdAt(sort: Desc)])
+}
+
+model ProductHighlight {
+  id           String  @id @default(uuid())
+  productId    String
+  title        String
+  description  String
+  iconUrl      String?
+  displayOrder Int     @default(0)
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  @@index([productId])
+}
+
+model ProductSpecification {
+  id           String @id @default(uuid())
+  productId    String
+  name         String
+  value        String
+  displayOrder Int    @default(0)
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  @@index([productId])
+}
+
+model ProductIncludedItem {
+  id           String @id @default(uuid())
+  productId    String
+  label        String
+  displayOrder Int    @default(0)
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  @@index([productId])
+}
+
+model ProductGallery {
+  id           String    @id @default(uuid())
+  productId    String
+  colorId      String?
+  imageUrl     String
+  displayOrder Int       @default(0)
+  product      Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color        Color?    @relation(fields: [colorId], references: [id], onDelete: SetNull)
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+
+  @@index([productId])
+  @@index([colorId])
+}
+
+model ProductFaq {
+  id        String    @id @default(uuid())
+  productId String
+  question  String
+  answer    String
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  @@index([productId])
+}
+
+// Bridge tables for many-to-many product options
+model ProductColor {
+  id        String   @id @default(uuid())
+  productId String
+  colorId   String
+  createdAt DateTime @default(now())
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color     Color     @relation(fields: [colorId], references: [id])
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  @@unique([productId, colorId])
+  @@index([productId])
+}
+
+model ProductStorageOption {
+  id              String   @id @default(uuid())
+  productId       String
+  storageOptionId String
+  createdAt       DateTime @default(now())
+
+  product       Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  storageOption StorageOption @relation(fields: [storageOptionId], references: [id])
+  isDeleted     Boolean       @default(false)
+  deletedAt     DateTime?
+
+  @@unique([productId, storageOptionId])
+  @@index([productId])
+}
+
+model ProductRamOption {
+  id          String   @id @default(uuid())
+  productId   String
+  ramOptionId String
+  createdAt   DateTime @default(now())
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ramOption RamOption @relation(fields: [ramOptionId], references: [id])
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  @@unique([productId, ramOptionId])
+  @@index([productId])
+}
+
+// =====================================================================================
+// ORDER, CART & PAYMENTS (STRIPE EXCLUSIVE)
+// =====================================================================================
+
+model Cart {
+  id        String   @id @default(uuid())
+  userId    String?  @unique
+  sessionId String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cartItems CartItem[]
+  isDeleted Boolean    @default(false)
+  deletedAt DateTime?
+}
+
+model CartItem {
+  id              String   @id @default(uuid())
+  cartId          String
+  productId       String
+  colorId         String
+  storageOptionId String
+  ramOptionId     String
+  quantity        Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  cart          Cart          @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color         Color         @relation(fields: [colorId], references: [id])
+  storageOption StorageOption @relation(fields: [storageOptionId], references: [id])
+  ramOption     RamOption     @relation(fields: [ramOptionId], references: [id])
+  isDeleted     Boolean       @default(false)
+  deletedAt     DateTime?
+
+  @@index([cartId])
+  @@index([productId])
+}
+
+model Order {
+  id             String      @id @default(uuid())
+  stringId       String      @unique
+  userId         String?
+  guestEmail     String? // For guest checkout - user email if not registered
+  orderStatus    OrderStatus @default(PENDING)
+  totalPrice     Decimal     @db.Decimal(12, 2)
+  shippingCost   Decimal     @default(0) @db.Decimal(12, 2)
+  shippingMethod String? // e.g., "Standard Delivery", "Express Delivery"
+  discountTotal  Decimal     @default(0) @db.Decimal(12, 2)
+  promoCodeUsed  String?
+
+  // Unified single delivery address reference linking to fulfillment destination
+  addressId String
+
+  paymentStatus      PaymentStatus @default(PENDING)
+  paymentMethod      PaymentMethod @default(STRIPE)
+  paymentIntentId    String?
+  trackingNumber     String?
+  cancellationReason String?
+  cancelledAt        DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  user       User?       @relation(fields: [userId], references: [id])
+  address    UserAddress @relation("OrderAddress", fields: [addressId], references: [id])
+  orderItems OrderItem[]
+  isDeleted  Boolean     @default(false)
+  deletedAt  DateTime?
+
+  @@index([userId])
+  @@index([addressId])
+  @@index([orderStatus])
+  @@index([paymentIntentId])
+}
+
+model OrderItem {
+  id              String  @id @default(uuid())
+  orderId         String
+  productId       String
+  colorId         String
+  storageOptionId String
+  ramOptionId     String
+  quantity        Int
+  priceAtPurchase Decimal @db.Decimal(12, 2)
+
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id])
+  color         Color         @relation(fields: [colorId], references: [id])
+  storageOption StorageOption @relation(fields: [storageOptionId], references: [id])
+  ramOption     RamOption     @relation(fields: [ramOptionId], references: [id])
+  isDeleted     Boolean       @default(false)
+  deletedAt     DateTime?
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+// =====================================================================================
+// PROMOTIONS, FEEDBACK & C2B RE-COMMERCE
+// =====================================================================================
+
+model PromoCode {
+  id                String       @id @default(uuid())
+  code              String       @unique
+  discountType      DiscountType @default(PERCENTAGE)
+  discountValue     Decimal      @db.Decimal(12, 2)
+  minOrderValue     Decimal?     @db.Decimal(12, 2)
+  maxUsageCount     Int?
+  currentUsageCount Int          @default(0)
+  startDate         DateTime
+  expiryDate        DateTime
+  isActive          Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  promoCodeSeriesBridge PromoCodeSeriesBridge[]
+  promoCodeModelBridge  PromoCodeModelBridge[]
+  isDeleted             Boolean                 @default(false)
+  deletedAt             DateTime?
+}
+
+model PromoCodeSeriesBridge {
+  id          String   @id @default(uuid())
+  promoCodeId String
+  seriesId    String
+  createdAt   DateTime @default(now())
+
+  promoCode PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  series    Series    @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  @@unique([promoCodeId, seriesId])
+}
+
+model PromoCodeModelBridge {
+  id          String   @id @default(uuid())
+  promoCodeId String
+  modelId     String
+  createdAt   DateTime @default(now())
+
+  promoCode   PromoCode   @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  deviceModel DeviceModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  isDeleted   Boolean     @default(false)
+  deletedAt   DateTime?
+
+  @@unique([promoCodeId, modelId])
+}
+
+model Review {
+  id        String       @id @default(uuid())
+  userId    String
+  productId String
+  rating    Int
+  comment   String?
+  status    ReviewStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  @@index([productId])
+}
+
+model SellRequest {
+  id               String     @id @default(uuid())
+  stringId         String     @unique
+  userId           String?
+  firstName        String
+  lastName         String
+  email            String
+  phone            String
+  deviceName       String
+  deviceModelId    String?
+  conditionId      String?
+  baseOfferPrice   Decimal    @db.Decimal(12, 2)
+  userOfferedPrice Decimal?   @db.Decimal(12, 2)
+  status           SellStatus @default(SUBMITTED)
+  serialNumber     String?
+  trackingNumber   String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  user        User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  condition   Condition?    @relation(fields: [conditionId], references: [id])
+  deviceModel DeviceModel?  @relation(fields: [deviceModelId], references: [id])
+  images      DeviceImage[]
+  isDeleted   Boolean       @default(false)
+  deletedAt   DateTime?
+
+  @@index([userId])
+  @@index([conditionId])
+  @@index([deviceModelId])
+}
+
+model DeviceImage {
+  id            String      @id @default(uuid())
+  sellRequestId String
+  imageUrl      String
+  sellRequest   SellRequest @relation(fields: [sellRequestId], references: [id], onDelete: Cascade)
+  isDeleted     Boolean     @default(false)
+  deletedAt     DateTime?
+
+  @@index([sellRequestId])
+}
+
+model BusinessForm {
+  id           String             @id @default(uuid())
+  companyName  String
+  name         String
+  email        String
+  phone        String
+  requirements String
+  status       BusinessFormStatus @default(NEW)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  isDeleted    Boolean            @default(false)
+  deletedAt    DateTime?
+
+  @@index([createdAt(sort: Desc)])
+  @@index([status])
+  @@index([isDeleted])
+}

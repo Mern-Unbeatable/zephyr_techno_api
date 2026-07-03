@@ -1,0 +1,4432 @@
+{
+  "info": {
+    "_postman_id": "150a93a3-413e-43ad-b005-95072b1a4f41",
+    "name": "Zephyr Techno Auth API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "48567967",
+    "_collection_link": "https://go.postman.co/collection/48567967-150a93a3-413e-43ad-b005-95072b1a4f41?source=collection_link"
+  },
+  
+  "item": [
+    {
+      "name": "auth",
+      "item": [
+        {
+          "name": "Change Password (Auth)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/change-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "change-password"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"email\": \"{{email}}\",\n  \"phone\": \"+8801712345678\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp\": \"{{otp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-email"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "if (res.success && res.accessToken) {",
+                  "  pm.collectionVariables.set('adminToken', res.accessToken);",
+                  "  console.log('[Postman] adminToken saved:', res.accessToken.substring(0, 20) + '...');",
+                  "} else {",
+                  "  console.warn('[Postman] Login did not return an accessToken. Check credentials.');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "forgot-password"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Reset OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp\": \"{{resetOtp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-reset-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-reset-otp"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "reset-password"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Resend OTP (Email Verification)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"type\": \"email-verification\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/resend-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "resend-otp"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login (User)",
+          "description": "User login with optional guest cart migration.\n\nOPTIONAL: Include guestSessionId to migrate guest cart items to authenticated user account.\n\nIf guest added items to cart before logging in:\n1. Guest items will be automatically merged into user's cart during login\n2. If same product exists in both carts, quantities are combined\n3. Guest session is cleared after migration",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "",
+                  "if (res.success && res.accessToken) {",
+                  "  pm.collectionVariables.set('userToken', res.accessToken);",
+                  "  console.log('[Postman] userToken saved:', res.accessToken.substring(0, 20) + '...');",
+                  "} else {",
+                  "  console.warn('[Postman] Login (User) did not return an accessToken.');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"tirafin110@homvela.com\",\n  \"password\": \"Admin@1234\",\n  \"guestSessionId\": \"{{guestSessionId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Resend OTP (Password Reset)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"type\": \"password-reset\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/resend-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "resend-otp"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "website",
+      "item": [
+        {
+          "name": "public",
+          "item": [
+            {
+              "name": "contact us",
+              "item": [
+                {
+                  "name": "Submit Contact (Public)",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "formdata",
+                      "formdata": [
+                        {
+                          "key": "firstName",
+                          "value": "John",
+                          "type": "text"
+                        },
+                        {
+                          "key": "email",
+                          "value": "john@example.com",
+                          "type": "text"
+                        },
+                        {
+                          "key": "subject",
+                          "value": "Support",
+                          "type": "text"
+                        },
+                        {
+                          "key": "phone",
+                          "value": "+8801712345678",
+                          "type": "text"
+                        },
+                        {
+                          "key": "message",
+                          "value": "Help me please",
+                          "type": "text"
+                        }
+                      ]
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/contact",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "contact"
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "business-form",
+              "item": [
+                {
+                  "name": "Submit Business Form (Public)",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"companyName\": \"Acme Corp\",\n  \"name\": \"John Smith\",\n  \"email\": \"john@acme.com\",\n  \"phone\": \"+8801712345678\",\n  \"requirements\": \"We need 500 units of refurbished iPhones monthly\"\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/public/business-form",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "public",
+                        "business-form"
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "sell",
+              "item": [
+                {
+                  "name": "Get All Series (Public)",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/sell/series",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "sell",
+                        "series"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get Models By Series (Public)",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/sell/models?seriesId={{seriesId}}",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "sell",
+                        "models"
+                      ],
+                      "query": [
+                        {
+                          "key": "seriesId",
+                          "value": "{{seriesId}}"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get All Conditions (Public)",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/sell/conditions",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "sell",
+                        "conditions"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get Price (Public)",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/sell/price?conditionId={{conditionId}}&deviceModelId={{deviceModelId}}",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "sell",
+                        "price"
+                      ],
+                      "query": [
+                        {
+                          "key": "conditionId",
+                          "value": "{{conditionId}}"
+                        },
+                        {
+                          "key": "deviceModelId",
+                          "value": "{{deviceModelId}}"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Finalize Sale (Public)",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"fullName\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"phone\": \"+8801712345678\",\n  \"deviceName\": \"iPhone 14\",\n  \"deviceModelId\": \"{{deviceModelId}}\",\n  \"conditionId\": \"{{conditionId}}\",\n  \"baseOfferPrice\": 300.00\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/sell/finalize",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "sell",
+                        "finalize"
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "product",
+              "item": [
+                {
+                  "name": "Get All Attributes (Public)",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/public/product/attributes",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "public",
+                        "product",
+                        "attributes"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "List Products (Public)",
+                  "description": "List all products with extensive filtering and sorting options.\n\n📋 FILTER PARAMETERS:\n\n1. **Category Filtering:**\n   - categoryId (string): Filter products by category UUID\n\n2. **Series & Model Filtering:**\n   - seriesId (string): Filter by device series UUID (e.g., Samsung Galaxy S series)\n   - deviceModelId (string): Filter by specific device model UUID (e.g., Galaxy S26 Ultra)\n\n3. **Condition Filtering:**\n   - conditionId (string): Filter by product condition UUID (e.g., NEW, EXCELLENT, GOOD)\n\n4. **Option Filtering (Multiple values create AND logic):**\n   - colorId (string): Filter products with specific color UUID\n   - storageOptionId (string): Filter products with storage option UUID (e.g., 256GB)\n   - ramOptionId (string): Filter products with RAM option UUID (e.g., 12GB)\n   - Example: colorId=red&storageOptionId=256gb returns products with BOTH red color AND 256GB storage\n\n5. **Price Range:**\n   - priceMin (number): Minimum price filter (e.g., 500)\n   - priceMax (number): Maximum price filter (e.g., 1500)\n   - Filters products where basePrice is between priceMin and priceMax (inclusive)\n\n6. **Text Search:**\n   - search (string): Full-text search across product title and description (case-insensitive)\n   - Partial matches work (e.g., search=galaxy returns Galaxy S26, Galaxy Z, etc.)\n\n7. **Product Status:**\n   - listingStatus (string): Filter by listing status - ACTIVE or INACTIVE\n   - isFeatured (string/boolean): true or false - filters featured products\n\n8. **Sorting:**\n   - sortBy (string): Sort order\n     • \"priceAsc\" - Sort by price (lowest to highest)\n     • \"priceDesc\" - Sort by price (highest to lowest)     \n     • \"featured\" - Sort by featured status (featured first)\n     • Default (if not provided) - Sorted by newest created\n\n9. **Pagination:**\n   - page (number): Page number (default: 1, minimum: 1)\n   - limit (number): Items per page (default: 24, maximum: 100)\n   - Skip = (page - 1) × limit\n\n⚙️ FILTER LOGIC:\n- All filters are OPTIONAL and can be combined\n- Multiple filters use AND logic (all conditions must match)\n- Multiple values for same filter type (color, storage, RAM) use AND logic\n- Returns: { success, data: [products], meta: {total, page, limit, ...} }\n\n🎯 EXAMPLES:\n1. GET /api/public/product?categoryId=abc&priceMin=100&priceMax=500&page=1&limit=20\n   → Returns products in category 'abc' between $100-$500, first 20 results\n\n2. GET /api/public/product?seriesId=xyz&colorId=red&storageOptionId=256&sortBy=priceAsc\n   → Returns Galaxy S series products with red color and 256GB storage, sorted by price low-to-high\n\n3. GET /api/public/product?search=iphone&listingStatus=ACTIVE&isFeatured=true\n   → Returns active featured products matching 'iphone'\n\n4. GET /api/public/product?deviceModelId=123&ramOptionId=12gb&limit=50\n   → Returns specific device model with 12GB RAM option, 50 items per page",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/public/product?categoryId={{categoryId}}&seriesId={{seriesId}}&deviceModelId={{deviceModelId}}&conditionId={{conditionId}}&colorId={{colorId}}&storageOptionId={{storageOptionId}}&ramOptionId={{ramOptionId}}&priceMin={{priceMin}}&priceMax={{priceMax}}&search={{search}}&page={{page}}&limit={{limit}}&sortBy={{sortBy}}",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "public",
+                        "product"
+                      ],
+                      "query": [
+                        {
+                          "key": "categoryId",
+                          "value": "{{categoryId}}",
+                          "description": "Filter products by category UUID. Returns only products in the specified category."
+                        },
+                        {
+                          "key": "seriesId",
+                          "value": "{{seriesId}}",
+                          "description": "Filter by device series UUID (e.g., Samsung Galaxy S series). Returns products in that series."
+                        },
+                        {
+                          "key": "deviceModelId",
+                          "value": "{{deviceModelId}}",
+                          "description": "Filter by specific device model UUID (e.g., Galaxy S26 Ultra). Returns products of that exact model."
+                        },
+                        {
+                          "key": "conditionId",
+                          "value": "{{conditionId}}",
+                          "description": "Filter by product condition UUID (NEW, EXCELLENT, GOOD, FAIR). Returns products matching the condition."
+                        },
+                        {
+                          "key": "colorId",
+                          "value": "{{colorId}}",
+                          "description": "Filter products by color UUID. When combined with other filters, uses AND logic (must match ALL conditions)."
+                        },
+                        {
+                          "key": "storageOptionId",
+                          "value": "{{storageOptionId}}",
+                          "description": "Filter products by storage option UUID (256GB, 512GB, 1TB, etc.). AND logic with other filters."
+                        },
+                        {
+                          "key": "ramOptionId",
+                          "value": "{{ramOptionId}}",
+                          "description": "Filter products by RAM option UUID (8GB, 12GB, 16GB, etc.). AND logic with other filters."
+                        },
+                        {
+                          "key": "priceMin",
+                          "value": "{{priceMin}}",
+                          "description": "Minimum price threshold (number). Returns products where basePrice >= priceMin."
+                        },
+                        {
+                          "key": "priceMax",
+                          "value": "{{priceMax}}",
+                          "description": "Maximum price threshold (number). Returns products where basePrice <= priceMax. Use with priceMin for range filtering."
+                        },
+                        {
+                          "key": "search",
+                          "value": "{{search}}",
+                          "description": "Full-text search (case-insensitive). Searches in product title and description. Partial matches work (e.g., 'galaxy' returns Galaxy S26, Galaxy Z, etc.)"
+                        },
+                        {
+                          "key": "page",
+                          "value": "{{page}}",
+                          "description": "Page number for pagination (default: 1, minimum: 1). Skip calculation: (page - 1) × limit"
+                        },
+                        {
+                          "key": "limit",
+                          "value": "{{limit}}",
+                          "description": "Items per page (default: 24, maximum: 100). Controls how many products are returned per page."
+                        },
+                        {
+                          "key": "sortBy",
+                          "value": "{{sortBy}}",
+                          "description": "Sort order: 'priceAsc' (low to high), 'priceDesc' (high to low), 'featured' (featured first), or omit for newest first (default)."
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get Product By ID (Public)",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/public/product/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "public",
+                        "product",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "user",
+          "item": [
+            {
+              "name": "Get My Profile (Auth)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{userToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/users/me",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "users",
+                    "me"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Profile (Auth)",
+              "description": "Update authenticated user's profile information.\n\nPersonal Information Fields:\n- firstName (string): User's first name\n- lastName (string): User's last name  \n- phone (string): User's phone number\n\nAddress Fields (in addresses array):\n- fullName (string, optional): Full name for address. Auto-generated from firstName + lastName if not provided\n- phone (string, optional): Phone number for address\n- street (string, required): Street address\n- city (string, required): City\n- state (string, optional): State/Province\n- zipCode (string, required): Postal code\n- country (string, required): Country\n- isDefault (boolean, optional): Set as default address\n\nRules:\n- At least one field must be provided\n- Email, role, and status cannot be updated\n- You can update personal info, addresses, or both\n- If no fullName provided for address, auto-generated from updated firstName + lastName\n- Response includes all updated data with addresses",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{userToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"Kevin\",\n  \"lastName\": \"Updated Last Name\",\n  \"phone\": \"+1-202-555-0118\",\n  \"addresses\": [\n    {\n      \"street\": \"Road No. 13/A, House no. 1320/C, Flat No. 5D\",\n      \"city\": \"Montgomery\",\n      \"state\": \"Alabama\",\n      \"zipCode\": \"1000\",\n      \"country\": \"US\"\n   }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/users/me",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "users",
+                    "me"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Add To Cart (Auth)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "",
+                      "if (res.success && res.data && res.data.id) {",
+                      "  pm.collectionVariables.set('cartItemId', res.data.id);",
+                      "  console.log('[Postman] cartItemId saved:', res.data.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{userToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"colorId\": \"{{colorId}}\",\n  \"storageOptionId\": \"{{storageOptionId}}\",\n  \"ramOptionId\": \"{{ramOptionId}}\",\n  \"quantity\": 1\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/cart",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "cart"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Cart (Auth)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{userToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/cart",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "cart"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Cart Item (Auth)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{userToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{ \"quantity\": 2 }"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/cart/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "cart",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "{{cartItemId}}"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Remove Cart Item (Auth)",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{userToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/cart/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "cart",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "{{cartItemId}}"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Clear Cart (Auth)",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{userToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/cart",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "cart"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Validate Promo Code (Auth)",
+              "description": "Validate a promo code against the authenticated user's cart.\n\n📋 FIELDS:\n- promoCode (string, required): The promo code to validate\n- cartItemIds (array, optional): Specific cart item IDs to validate against. If omitted, validates against ALL cart items.\n\n💡 USE CASE: If the user has 5 items in cart but is only checking out 3, send those 3 cart item IDs. The discount and finalTotal will be calculated for those 3 items only. Pass the same cartItemIds to the checkout request.",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{userToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"promoCode\": \"{{promoCode}}\",\n  \"cartItemIds\": []\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/public/product/promo/validate",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "public",
+                    "product",
+                    "promo",
+                    "validate"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get My Orders (Auth)",
+              "description": "Retrieve authenticated user's orders with pagination and optional status filtering.\n\n📋 FILTER PARAMETERS:\n\n1. **Status Filtering (optional):**\n   - status (string): Filter orders by order status\n     • PENDING - Order created, awaiting payment\n     • PROCESSING - Payment received, order being prepared\n     • SHIPPED - Order sent to customer\n     • DELIVERED - Order delivered to customer\n     • CANCELLED - Order cancelled\n   - If not provided: Returns ALL user's orders regardless of status\n\n2. **Pagination:**\n   - page (number): Page number (default: 1, minimum: 1)\n   - limit (number): Items per page (default: 50, maximum: 100)\n   - Skip = (page - 1) × limit\n\n🔒 Auth required - User sees only their own orders\n\n💾 RESPONSE FIELDS:\n- id: Order UUID\n- stringId: Order display ID (e.g., ORD-ABC123)\n- orderStatus: Status (PENDING, PROCESSING, SHIPPED, DELIVERED, CANCELLED)\n- totalPrice: Final price after discounts\n- shippingCost: Shipping charges\n- discountTotal: Applied discount amount\n- promoCodeUsed: Promo code if applied\n- paymentStatus: PENDING, AUTHORIZED, PAID, FAILED\n- paymentMethod: STRIPE or other payment method\n- shippingAddress: Full address object\n- orderItems: Array of items with product details\n- createdAt, updatedAt: Timestamps\n\n🎯 EXAMPLES:\n1. GET /api/orders?page=1&limit=10\n   → Returns user's first 10 orders (all statuses)\n\n2. GET /api/orders?status=DELIVERED&page=1&limit=20\n   → Returns user's delivered orders\n\n3. GET /api/orders?status=PENDING\n   → Returns user's pending orders\n\n4. GET /api/orders?status=CANCELLED&page=2&limit=15\n   → Returns user's cancelled orders (page 2)\n\n📊 PAGINATION METADATA:\n- Response includes meta with: total, page, limit, totalPages, count, hasNext, hasPrev",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "if (res && res.meta && typeof res.meta.total !== 'undefined') {",
+                      "  pm.collectionVariables.set('myOrdersTotal', String(res.meta.total));",
+                      "  console.log('[Postman] myOrdersTotal saved:', res.meta.total);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{userToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/orders?page={{page}}&limit={{limit}}&status={{status}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "orders"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "{{page}}",
+                      "description": "Page number for pagination (default: 1). Skip = (page - 1) × limit"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "{{limit}}",
+                      "description": "Items per page (default: 50, maximum: 100). Controls how many orders are returned per page."
+                    },
+                    {
+                      "key": "status",
+                      "value": "{{status}}",
+                      "description": "Filter by order status: PENDING, PROCESSING, SHIPPED, DELIVERED, or CANCELLED. If omitted, returns all orders."
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Shop Now - Direct Product Checkout (Auth)",
+              "description": "Direct product purchase without adding to cart. User can buy a product directly from product detail page.",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{userToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"productId\": \"<product-uuid>\",\n  \"colorId\": \"<color-uuid>\",\n  \"storageOptionId\": \"<storage-uuid>\",\n  \"ramOptionId\": \"<ram-uuid>\",\n  \"quantity\": 1,\n  \"shippingAddress\": {\n    \"fullName\": \"John Doe\",\n    \"phone\": \"+1 (555) 000-0000\",\n    \"street\": \"123 Main St\",\n    \"city\": \"San Francisco\",\n    \"state\": \"CA\",\n    \"zipCode\": \"94103\",\n    \"country\": \"US\"\n  },\n  \"shippingMethod\": \"Standard Delivery\",\n  \"shippingCost\": 0,\n  \"promoCode\": \"{{promoCode}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/public/product/checkout",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "public",
+                    "product",
+                    "checkout"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Checkout Session (Auth)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{userToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cartItemIds\": [],\n  \"promoCode\": \"{{promoCode}}\",\n  \"shippingAddress\": {\n    \"fullName\": \"John Doe\",\n    \"phone\": \"+1 (555) 000-0000\",\n    \"street\": \"123 Main St\",\n    \"city\": \"San Francisco\",\n    \"state\": \"CA\",\n    \"zipCode\": \"94103\",\n    \"country\": \"US\"\n  },\n  \"shippingMethod\": \"Standard Delivery\",\n  \"shippingCost\": 0\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/public/product/checkout",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "public",
+                    "product",
+                    "checkout"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Confirm Checkout Session",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sessionId\": \"<stripe-session-id>\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/public/product/checkout/confirm",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "public",
+                    "product",
+                    "checkout",
+                    "confirm"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Cancel Order (Auth)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{userToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"Change of plans\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/orders/:id/cancel",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "orders",
+                    ":id",
+                    "cancel"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "guest",
+          "item": [
+            {
+              "name": "Add To Cart (Guest)",
+              "description": "Add product to cart as guest user without authentication.\nGuest must provide guestSessionId (UUID) to track cart across sessions.\n\n📋 REQUIRED PARAMETERS:\n- guestSessionId (string): Unique session identifier (e.g., UUID)\n- productId (string): Product UUID\n- colorId (string): Selected color UUID\n- storageOptionId (string): Selected storage option UUID\n- ramOptionId (string): Selected RAM option UUID\n- quantity (number): Quantity to add (default: 1)\n\n🎯 FLOW:\n1. Frontend generates guestSessionId (UUID) and stores in localStorage\n2. Send guestSessionId with each request\n3. Cart automatically created for new session\n4. Duplicate configs increase quantity instead of creating duplicate items",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Auto-generate guestSessionId if not already set",
+                      "if (!pm.collectionVariables.get('guestSessionId') || pm.collectionVariables.get('guestSessionId') === '') {",
+                      "  const uuid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {",
+                      "    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);",
+                      "    return v.toString(16);",
+                      "  });",
+                      "  const sessionId = uuid();",
+                      "  pm.collectionVariables.set('guestSessionId', sessionId);",
+                      "  console.log('[Postman] Generated guestSessionId:', sessionId);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"guestSessionId\": \"{{guestSessionId}}\",\n  \"productId\": \"{{productId}}\",\n  \"colorId\": \"{{colorId}}\",\n  \"storageOptionId\": \"{{storageOptionId}}\",\n  \"ramOptionId\": \"{{ramOptionId}}\",\n  \"quantity\": 1\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/cart",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "cart"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Cart (Guest)",
+              "description": "Retrieve guest cart with all items and totals.\n\n📋 REQUIRED PARAMETERS:\n- guestSessionId (string, query param): Guest session identifier\n\n💾 RESPONSE:\n- items: Array of cart items with product details\n- subtotal: Sum of all item totals\n- totalItems: Total quantity of items in cart",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/cart?guestSessionId={{guestSessionId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "cart"
+                  ],
+                  "query": [
+                    {
+                      "key": "guestSessionId",
+                      "value": "{{guestSessionId}}"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Cart Item (Guest)",
+              "description": "Update quantity of item in guest cart.",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"guestSessionId\": \"{{guestSessionId}}\",\n  \"quantity\": 2\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/cart/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "cart",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "{{cartItemId}}"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Remove Cart Item (Guest)",
+              "description": "Remove specific item from guest cart.",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"guestSessionId\": \"{{guestSessionId}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/cart/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "cart",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "{{cartItemId}}"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Clear Cart (Guest)",
+              "description": "Remove all items from guest cart.",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"guestSessionId\": \"{{guestSessionId}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/cart",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "cart"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Validate Promo Code (Guest)",
+              "description": "Validate a promo code against the guest cart before checkout. No authentication required — pass guestSessionId in the body.\n\n📋 FIELDS:\n- guestSessionId (string, required): Guest session identifier\n- promoCode (string, required): The promo code to validate\n- cartItemIds (array, optional): Specific cart item IDs to validate against. If omitted, validates against ALL guest cart items.\n\n💡 USE CASE: If the guest has 5 items in cart but is only checking out 3, send those 3 cart item IDs. The discount and finalTotal will be calculated for those 3 items only. Pass the same cartItemIds to the checkout request.",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"guestSessionId\": \"{{guestSessionId}}\",\n  \"promoCode\": \"{{promoCode}}\",\n  \"cartItemIds\": []\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/public/product/promo/validate",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "public",
+                    "product",
+                    "promo",
+                    "validate"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Checkout Session (Guest)",
+              "description": "Create checkout session for guest user from cart.\n\n📋 REQUIRED PARAMETERS:\n- guestSessionId (string): Guest session identifier\n- guestEmail (string): Guest email for order tracking\n- shippingAddress (object): Delivery address with fields: fullName, street, city, zipCode, country\n- cartItemIds (array, optional): Specific items to checkout. If empty, all items checked out\n- shippingMethod (string, optional): Delivery method (e.g., \"Standard Delivery\")\n- shippingCost (number, optional): Shipping charges (default: 0)\n- promoCode (string, optional): Discount code\n\n✅ FLOW:\n1. Guest provides email (required for order tracking)\n2. Cart items fetched and validated\n3. Order created with guestEmail and guest session\n4. Stripe checkout session generated\n5. Returns checkout URL for payment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"guestSessionId\": \"{{guestSessionId}}\",\n  \"guestEmail\": \"guest@example.com\",\n  \"cartItemIds\": [],\n  \"shippingAddress\": {\n    \"fullName\": \"John Doe\",\n    \"phone\": \"+1 (555) 000-0000\",\n    \"street\": \"123 Main St\",\n    \"city\": \"San Francisco\",\n    \"state\": \"CA\",\n    \"zipCode\": \"94103\",\n    \"country\": \"US\"\n  },\n  \"shippingMethod\": \"Standard Delivery\",\n  \"shippingCost\": 0,\n  \"promoCode\": \"{{promoCode}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/public/product/checkout",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "public",
+                    "product",
+                    "checkout"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Confirm Checkout Session (Guest)",
+              "description": "Confirm payment for guest checkout after Stripe payment completion.\n\n📋 PARAMETERS:\n- sessionId (string): Stripe checkout session ID (returned from checkout creation)\n\n✅ RESPONSE:\n- Returns confirmed order details\n- Updates order status to PROCESSING\n- Updates payment status to PAID",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sessionId\": \"<stripe-session-id>\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/public/product/checkout/confirm",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "public",
+                    "product",
+                    "checkout",
+                    "confirm"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "admin",
+      "item": [
+        {
+          "name": "attributes",
+          "item": [
+            {
+              "name": "Category",
+              "item": [
+                {
+                  "name": "Create Category",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"New\"\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/categories",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "categories"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get All Categories",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/categories",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "categories"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get Category By ID",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/categories/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "categories",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Update Category",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"Used\"\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/categories/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "categories",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Delete Category",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/categories/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "categories",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Series",
+              "item": [
+                {
+                  "name": "Create Series",
+                  "description": "Create a new series with optional image upload.\n\n📋 FIELDS:\n- name (string, required): Series name (e.g., \"iPhone\", \"Samsung Galaxy\")\n- image (file, optional): Series image file (images only, max 5MB)\n\n📝 HOW TO USE:\n1. Open this request in Postman\n2. Go to Body tab\n3. Select \"form-data\"\n4. Add text field: key=\"name\", value=\"iPhone\"\n5. Add file field: key=\"image\", select your image file\n6. Send the request",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "body": {
+                      "mode": "formdata",
+                      "formdata": [
+                        {
+                          "key": "name",
+                          "value": "iPhone",
+                          "type": "text"
+                        },
+                        {
+                          "key": "image",
+                          "type": "file",
+                          "src": ""
+                        }
+                      ]
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/series",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "series"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get All Series",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/series",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "series"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get Series By ID",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/series/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "series",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Update Series",
+                  "description": "Update an existing series with optional image upload.\n\n📋 FIELDS:\n- name (string, optional): Series name to update\n- image (file, optional): New series image file (images only, max 5MB)\n\n📝 HOW TO USE:\n1. Open this request in Postman\n2. Go to Body tab\n3. Select \"form-data\"\n4. Add fields you want to update:\n   - Text field: key=\"name\", value=\"Samsung Galaxy\"\n   - File field: key=\"image\", select your image file\n5. You can update one or both fields\n6. Send the request\n\n📌 NOTE: Both fields are optional. If not provided, only that data is updated.",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "body": {
+                      "mode": "formdata",
+                      "formdata": [
+                        {
+                          "key": "name",
+                          "value": "Samsung Galaxy",
+                          "type": "text"
+                        },
+                        {
+                          "key": "image",
+                          "type": "file",
+                          "src": ""
+                        }
+                      ]
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/series/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "series",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Delete Series",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/series/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "series",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Model",
+              "item": [
+                {
+                  "name": "Create Model",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"iPhone 15 Pro\",\n  \"seriesId\": \"<series-uuid>\"\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/models",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "models"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get All Models",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/models",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "models"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get Models By Series",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/models?seriesId={{seriesId}}",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "models"
+                      ],
+                      "query": [
+                        {
+                          "key": "seriesId",
+                          "value": "{{seriesId}}"
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get Model By ID",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/models/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "models",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Update Model",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"iPhone 15\"\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/models/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "models",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Delete Model",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/models/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "models",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Condition",
+              "item": [
+                {
+                  "name": "Create Condition",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"Excellent\"\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/conditions",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "conditions"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get All Conditions",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/conditions",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "conditions"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get Condition By ID",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/conditions/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "conditions",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Update Condition",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"Very Good\"\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/conditions/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "conditions",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Delete Condition",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/conditions/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "conditions",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Condition Model Price",
+              "item": [
+                {
+                  "name": "Get All Condition Model Prices",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/condition-model-prices",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "condition-model-prices"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Create Condition Model Price",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"conditionId\": \"CONDITION_ID_HERE\",\n  \"deviceModelId\": \"MODEL_ID_HERE\",\n  \"price\": 100.00\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/condition-model-prices",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "condition-model-prices"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get Condition Model Price By ID",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/condition-model-prices/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "condition-model-prices",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Update Condition Model Price",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"price\": 120.00\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/condition-model-prices/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "condition-model-prices",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Delete Condition Model Price",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/condition-model-prices/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "condition-model-prices",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Color",
+              "item": [
+                {
+                  "name": "Create Color",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"Midnight Black\"\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/colors",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "colors"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get All Colors",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/colors",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "colors"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get Color By ID",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/colors/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "colors",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Update Color",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"Rose Gold\"\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/colors/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "colors",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Delete Color",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/colors/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "colors",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Storage",
+              "item": [
+                {
+                  "name": "Create Storage Option",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"256 GB\"\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/storage-options",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "storage-options"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get All Storage Options",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/storage-options",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "storage-options"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get Storage Option By ID",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/storage-options/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "storage-options",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Update Storage Option",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"512 GB\"\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/storage-options/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "storage-options",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Delete Storage Option",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/storage-options/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "storage-options",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "RAM",
+              "item": [
+                {
+                  "name": "Create RAM Option",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"8 GB\"\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/ram-options",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "ram-options"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get All RAM Options",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/ram-options",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "ram-options"
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Get RAM Option By ID",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/ram-options/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "ram-options",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Update RAM Option",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"16 GB\"\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/ram-options/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "ram-options",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Delete RAM Option",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{adminToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/admin/attributes/ram-options/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "api",
+                        "admin",
+                        "attributes",
+                        "ram-options",
+                        ":id"
+                      ],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "value": ""
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "dashboard",
+          "item": [
+            {
+              "name": "Dashboard Overview (Admin)",
+              "description": "Admin dashboard endpoint to retrieve overview statistics and KPIs.\n\n🔒 Admin-only endpoint - requires adminToken\n\n📊 RESPONSE:\nReturns aggregated statistics including:\n- Total orders and revenue\n- Active users\n- Recent orders summary\n- Top-selling products\n- Order status breakdown (PENDING, PROCESSING, SHIPPED, DELIVERED, CANCELLED)\n- Dashboard widgets data\n\n📝 NOTE:\n- No query parameters available for this endpoint\n- Returns current/global statistics\n- Use /api/admin/dashboard/revenue-overview?year=XXXX for year-specific revenue filtering",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/dashboard/overview",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "dashboard",
+                    "overview"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Revenue Overview (Admin)",
+              "description": "Admin dashboard endpoint to retrieve revenue statistics filtered by year.\n\n📋 FILTER PARAMETERS:\n\n1. **Year Filtering (optional):**\n   - year (number): Filter revenue by specific year (e.g., 2026)\n   - If not provided: Returns data for current year\n   - Default: Current calendar year\n\n⚙️ RESPONSE:\n- Returns monthly revenue breakdown for the specified year\n- Includes:\n  • Monthly revenue totals\n  • Order count per month\n  • Average order value\n  • Total revenue for the year\n  • Growth statistics\n\n🔒 Admin-only endpoint - requires adminToken\n\n🎯 EXAMPLES:\n1. GET /api/admin/dashboard/revenue-overview?year=2026\n   → Returns complete revenue data for 2026 (January - December)\n\n2. GET /api/admin/dashboard/revenue-overview?year=2025\n   → Returns revenue data for 2025\n\n3. GET /api/admin/dashboard/revenue-overview\n   → Returns revenue data for current year (if not specified)\n\n📊 TYPICAL RESPONSE FORMAT:\n- months: Array with monthly data\n  • month: Month number (1-12)\n  • monthName: Month name\n  • revenue: Total revenue for month\n  • orders: Order count for month\n  • avgOrderValue: Average order value\n- summary: Yearly summary\n  • totalRevenue: Total revenue for year\n  • totalOrders: Total orders for year\n  • avgOrderValue: Average order value for year",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/dashboard/revenue-overview?year=2026",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "dashboard",
+                    "revenue-overview"
+                  ],
+                  "query": [
+                    {
+                      "key": "year",
+                      "value": "2026",
+                      "description": "Filter revenue by year (e.g., 2026). Returns monthly revenue breakdown for that year."
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "products",
+          "item": [
+            {
+              "name": "Get All Attribute Options",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/attributes/all-options",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "attributes",
+                    "all-options"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Product",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Samsung Galaxy S23 FE",
+                      "type": "text"
+                    },
+                    {
+                      "key": "categoryId",
+                      "value": "CATEGORY_ID_HERE",
+                      "type": "text"
+                    },
+                    {
+                      "key": "seriesId",
+                      "value": "SERIES_ID_HERE",
+                      "type": "text"
+                    },
+                    {
+                      "key": "deviceModelId",
+                      "value": "MODEL_ID_HERE",
+                      "type": "text"
+                    },
+                    {
+                      "key": "conditionId",
+                      "value": "CONDITION_ID_HERE",
+                      "type": "text"
+                    },
+                    {
+                      "key": "basePrice",
+                      "value": "45000",
+                      "type": "text"
+                    },
+                    {
+                      "key": "stockQuantity",
+                      "value": "50",
+                      "type": "text"
+                    },
+                    {
+                      "key": "colorIds",
+                      "value": "[\"COLOR_ID_1\", \"COLOR_ID_2\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "storageOptionIds",
+                      "value": "[\"STORAGE_ID_1\", \"STORAGE_ID_2\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "ramOptionIds",
+                      "value": "[\"RAM_ID_1\", \"RAM_ID_2\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "introduction",
+                      "value": "Premium flagship phone with amazing camera and performance",
+                      "type": "text"
+                    },
+                    {
+                      "key": "faqs",
+                      "value": "[{\"question\":\"What colors are available?\",\"answer\":\"Titanium Blue and Phantom Black\"},{\"question\":\"Is warranty included?\",\"answer\":\"Yes, 1 year official warranty\"}]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "highlights",
+                      "value": "[{\"title\":\"Amazing Display\",\"description\":\"6.4 inch Dynamic AMOLED 2X with 120Hz refresh rate\",\"iconUrl\":\"\",\"displayOrder\":0},{\"title\":\"Powerful Performance\",\"description\":\"Snapdragon 8 Gen 2 processor with 8GB RAM\",\"iconUrl\":\"\",\"displayOrder\":1},{\"title\":\"Pro Camera\",\"description\":\"50MP triple camera system with OIS\",\"iconUrl\":\"\",\"displayOrder\":2}]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "specifications",
+                      "value": "[{\"name\":\"Screen Size\",\"value\":\"6.4 inches\",\"displayOrder\":0},{\"name\":\"Processor\",\"value\":\"Snapdragon 8 Gen 2\",\"displayOrder\":1},{\"name\":\"Battery\",\"value\":\"4500mAh\",\"displayOrder\":2},{\"name\":\"Camera\",\"value\":\"50MP + 12MP + 8MP\",\"displayOrder\":3},{\"name\":\"OS\",\"value\":\"Android 14\",\"displayOrder\":4}]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "listingStatus",
+                      "value": "ACTIVE",
+                      "type": "text"
+                    },
+                    {
+                      "key": "images",
+                      "type": "file",
+                      "value": null
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/products",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "products"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get All Products",
+              "description": "Admin endpoint to list all products with filtering and pagination (same filters as public endpoint).\n\n📋 FILTER PARAMETERS:\n\n1. **Category Filtering:**\n   - categoryId (string): Filter products by category UUID\n\n2. **Series & Model Filtering:**\n   - seriesId (string): Filter by device series UUID\n   - deviceModelId (string): Filter by specific device model UUID\n\n3. **Condition Filtering:**\n   - conditionId (string): Filter by product condition UUID\n\n4. **Option Filtering:**\n   - colorId (string): Filter products with specific color\n   - storageOptionId (string): Filter products with storage option\n   - ramOptionId (string): Filter products with RAM option\n\n5. **Price Range:**\n   - priceMin (number): Minimum price\n   - priceMax (number): Maximum price\n\n6. **Text Search:**\n   - search (string): Search in title and description (case-insensitive)\n\n7. **Product Status:**\n   - listingStatus (string): ACTIVE or INACTIVE\n   - isFeatured (string/boolean): true or false\n\n8. **Sorting:**\n   - sortBy (string): priceAsc, priceDesc, featured, or default (newest)\n\n9. **Pagination:**\n   - page (number): Page number (default: 1)\n   - limit (number): Items per page (default: 24, max: 100)\n\n🔒 Admin-only endpoint - requires adminToken\n\n⚙️ RESPONSE:\n- Returns all products (including inactive/unlisted)\n- Includes full product details with related data\n- Includes featured status and timestamps",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/products",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "products"
+                  ],
+                  "query": [
+                    {
+                      "key": "categoryId",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Filter products by category UUID. Returns only products in the specified category."
+                    },
+                    {
+                      "key": "seriesId",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Filter by device series UUID. Returns products in that series."
+                    },
+                    {
+                      "key": "deviceModelId",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Filter by specific device model UUID. Returns products of that exact model."
+                    },
+                    {
+                      "key": "conditionId",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Filter by product condition UUID (NEW, EXCELLENT, GOOD, FAIR)."
+                    },
+                    {
+                      "key": "colorId",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Filter products by color UUID. AND logic with other filters."
+                    },
+                    {
+                      "key": "storageOptionId",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Filter products by storage option UUID (256GB, 512GB, etc.). AND logic with other filters."
+                    },
+                    {
+                      "key": "ramOptionId",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Filter products by RAM option UUID (8GB, 12GB, etc.). AND logic with other filters."
+                    },
+                    {
+                      "key": "priceMin",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Minimum price threshold. Returns products where basePrice >= priceMin."
+                    },
+                    {
+                      "key": "priceMax",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Maximum price threshold. Returns products where basePrice <= priceMax. Use with priceMin for range filtering."
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Full-text search (case-insensitive). Searches in product title and description."
+                    },
+                    {
+                      "key": "listingStatus",
+                      "value": "ACTIVE",
+                      "disabled": true,
+                      "description": "Filter by listing status: ACTIVE or INACTIVE. Admin sees all products regardless of status."
+                    },
+                    {
+                      "key": "isFeatured",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Filter featured products: true or false."
+                    },
+                    {
+                      "key": "sortBy",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Sort order: 'priceAsc', 'priceDesc', 'featured', or omit for default (newest first)."
+                    },
+                    {
+                      "key": "page",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Page number (default: 1). Skip = (page - 1) × limit"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Items per page (default: 24, maximum: 100)."
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Product By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/products/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "products",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "PRODUCT_ID_HERE"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Product",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Samsung Galaxy S23 FE (Updated)",
+                      "type": "text",
+                      "disabled": true
+                    },
+                    {
+                      "key": "basePrice",
+                      "value": "42000",
+                      "type": "text",
+                      "disabled": true
+                    },
+                    {
+                      "key": "stockQuantity",
+                      "value": "75",
+                      "type": "text",
+                      "disabled": true
+                    },
+                    {
+                      "key": "listingStatus",
+                      "value": "ACTIVE",
+                      "type": "text",
+                      "disabled": true
+                    },
+                    {
+                      "key": "conditionId",
+                      "value": "CONDITION_ID_HERE",
+                      "type": "text",
+                      "disabled": true
+                    },
+                    {
+                      "key": "colorIds",
+                      "value": "[\"COLOR_ID_1\", \"COLOR_ID_2\", \"COLOR_ID_3\"]",
+                      "type": "text",
+                      "disabled": true
+                    },
+                    {
+                      "key": "storageOptionIds",
+                      "value": "[\"STORAGE_ID_1\"]",
+                      "type": "text",
+                      "disabled": true
+                    },
+                    {
+                      "key": "ramOptionIds",
+                      "value": "[\"RAM_ID_1\", \"RAM_ID_2\"]",
+                      "type": "text",
+                      "disabled": true
+                    },
+                    {
+                      "key": "introduction",
+                      "value": "Updated description...",
+                      "type": "text",
+                      "disabled": true
+                    },
+                    {
+                      "key": "faqs",
+                      "value": "[{\"question\":\"Updated question?\",\"answer\":\"Updated answer\"}]",
+                      "type": "text",
+                      "disabled": true
+                    },
+                    {
+                      "key": "highlights",
+                      "value": "[{\"title\":\"New Feature\",\"description\":\"Updated highlight\",\"iconUrl\":\"\",\"displayOrder\":0}]",
+                      "type": "text",
+                      "disabled": true
+                    },
+                    {
+                      "key": "specifications",
+                      "value": "[{\"name\":\"Screen Size\",\"value\":\"6.5 inches\",\"displayOrder\":0}]",
+                      "type": "text",
+                      "disabled": true
+                    },
+                    {
+                      "key": "images",
+                      "type": "file",
+                      "value": null,
+                      "disabled": true
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/products/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "products",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "PRODUCT_ID_HERE"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Product",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/products/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "products",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "PRODUCT_ID_HERE"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Toggle Featured",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"isFeatured\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/products/:id/feature",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "products",
+                    ":id",
+                    "feature"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "PRODUCT_ID_HERE"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "contacts",
+          "item": [
+            {
+              "name": "Get Contacts (Admin)",
+              "description": "Admin endpoint to list all contact messages with pagination and sorting.\n\n📋 FILTER PARAMETERS:\n\n1. **Pagination:**\n   - page (number): Page number (default: 1, minimum: 1)\n   - limit (number): Items per page (default: 10, maximum: 100)\n   - Skip = (page - 1) × limit\n\n⚙️ SORTING:\n- Results sorted by createdAt in descending order (newest first)\n- No additional sorting options\n\n🔒 Admin-only endpoint - requires adminToken\n\n💾 RESPONSE FIELDS:\n- id: Contact message UUID\n- firstName: Sender's first name\n- lastName: Sender's last name\n- email: Sender's email address\n- phone: Sender's phone number\n- subject: Message subject\n- message: Message content\n- status: Contact status (NEW, PENDING, CONTRACTED)\n- createdAt: Submission timestamp\n\n🎯 EXAMPLES:\n1. GET /api/admin/contacts?page=1&limit=10\n   → Returns first 10 contact messages\n\n2. GET /api/admin/contacts?page=2&limit=20\n   → Returns contact messages on page 2 (20 per page)\n\n3. GET /api/admin/contacts?limit=50\n   → Returns first 50 contact messages\n\n📊 PAGINATION METADATA:\n- Response includes meta with: total, page, limit, totalPages, count, hasNext, hasPrev\n- hasStatus indicates whether status field is available in response",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/contacts?page=1&limit=10",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "contacts"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number for pagination (default: 1). Skip = (page - 1) × limit"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10",
+                      "description": "Items per page (default: 10, maximum: 100). Controls how many contact messages are returned per page."
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Contact By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/contacts/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "contacts",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Contact (Status/Fields)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"CONTACTED\"\n}\n// CONTACTED"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/contacts/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "contacts",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Contact (Admin)",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/contacts/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "contacts",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "business-forms",
+          "item": [
+            {
+              "name": "Get All Business Forms (Admin)",
+              "description": "Admin endpoint to list all business form submissions with pagination and sorting.\n\n📋 FILTER PARAMETERS:\n\n1. **Pagination:**\n   - page (number): Page number (default: 1, minimum: 1)\n   - limit (number): Items per page (default: 10, maximum: 100)\n   - Skip = (page - 1) × limit\n\n⚙️ SORTING:\n- Results sorted by createdAt in descending order (newest first)\n- No additional sorting options\n\n🔒 Admin-only endpoint - requires adminToken\n\n💾 RESPONSE FIELDS:\n- id: Business form UUID\n- companyName: Company name\n- name: Contact person's name\n- email: Contact email address\n- phone: Contact phone number\n- requirements: Business requirements\n- status: Form status:\n  • NEW - Initial submission status\n  • CONTACTED - Admin has contacted the business\n  • CLOSED - Form processing completed\n- createdAt: Submission timestamp\n\n🎯 EXAMPLES:\n1. GET /api/admin/business-forms?page=1&limit=10\n   → Returns first 10 business forms\n\n2. GET /api/admin/business-forms?page=2&limit=20\n   → Returns business forms on page 2 (20 per page)\n\n3. GET /api/admin/business-forms?limit=50\n   → Returns first 50 business forms\n\n📊 PAGINATION METADATA:\n- Response includes meta with: total, page, limit, totalPages, count, hasNext, hasPrev",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/business-forms?page=1&limit=10",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "business-forms"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number for pagination (default: 1). Skip = (page - 1) × limit"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10",
+                      "description": "Items per page (default: 10, maximum: 100). Controls how many business forms are returned per page."
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Business Form By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/business-forms/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "business-forms",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Business Form (Status/Fields)",
+              "description": "Update business form details. Admin can update any field including status.\n\n📋 UPDATABLE FIELDS:\n- companyName (string): Company name\n- name (string): Contact person's name\n- email (string): Contact email\n- phone (string): Contact phone number\n- requirements (string): Business requirements\n- status (string): Form status options:\n  • NEW - Initial submission status\n  • CONTACTED - Admin has contacted the business\n  • CLOSED - Form processing completed\n\n🔒 Admin-only endpoint - requires adminToken",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"CONTACTED\"\n}\n// NEW   CONTACTED   CLOSED"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/business-forms/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "business-forms",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Business Form (Admin)",
+              "description": "Soft delete a business form submission.\n\n🔒 Admin-only endpoint - requires adminToken\n\n📌 NOTE: This is a soft delete - the record is marked as deleted but not permanently removed from database.",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/business-forms/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "business-forms",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "promocodes",
+          "item": [
+            {
+              "name": "Create PromoCode",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "code",
+                      "value": "SAVE10",
+                      "type": "text"
+                    },
+                    {
+                      "key": "discountType",
+                      "value": "PERCENTAGE",
+                      "type": "text"
+                    },
+                    {
+                      "key": "discountValue",
+                      "value": "10",
+                      "type": "text"
+                    },
+                    {
+                      "key": "minOrderValue",
+                      "value": "50",
+                      "type": "text"
+                    },
+                    {
+                      "key": "maxUsageCount",
+                      "value": "100",
+                      "type": "text"
+                    },
+                    {
+                      "key": "startDate",
+                      "value": "2026-05-16T00:00:00.000Z",
+                      "type": "text"
+                    },
+                    {
+                      "key": "expiryDate",
+                      "value": "2026-12-31T23:59:59.000Z",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isActive",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "applicableModelIds",
+                      "value": "[\"MODEL_UUID_1\", \"MODEL_UUID_2\"]",
+                      "type": "text"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/promocodes",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "promocodes"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get PromoCodes (Admin)",
+              "description": "Admin endpoint to list all promo/discount codes with pagination, search, and status filtering.\n\n📋 FILTER PARAMETERS:\n\n1. **Status Filter (optional):**\n   - status (string): Filter by promo status\n     • active   — isActive=true AND not yet expired\n     • disabled — isActive=false AND not yet expired\n     • expired  — expiryDate has passed (regardless of isActive)\n   - If omitted: Returns all promo codes\n\n2. **Text Search (optional):**\n   - q (string): Search promo codes by code name (case-insensitive partial match)\n\n3. **Pagination:**\n   - page (number): Page number (default: 1, minimum: 1)\n   - limit (number): Items per page (default: 20, maximum: 100)\n\n🎯 EXAMPLES:\n1. GET /api/admin/promocodes?status=active\n   → Returns active, non-expired promo codes\n\n2. GET /api/admin/promocodes?status=disabled\n   → Returns disabled (isActive=false) non-expired codes\n\n3. GET /api/admin/promocodes?status=expired\n   → Returns all expired promo codes\n\n4. GET /api/admin/promocodes?q=SUMMER&status=active\n   → Active codes containing \"SUMMER\"",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/promocodes?page=1&limit=10",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "promocodes"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number for pagination (default: 1)."
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10",
+                      "description": "Items per page (default: 20, maximum: 100)."
+                    },
+                    {
+                      "key": "status",
+                      "value": "active",
+                      "disabled": true,
+                      "description": "Filter by status: active | expired"
+                    },
+                    {
+                      "key": "q",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Search by promo code name (case-insensitive partial match)."
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Promo By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/promocodes/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "promocodes",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Promo",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "discountValue",
+                      "value": "15",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isActive",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "applicableModelIds",
+                      "value": "[\"MODEL_UUID_1\"]",
+                      "type": "text"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/promocodes/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "promocodes",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Promo (Admin)",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/promocodes/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "promocodes",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "user management",
+          "item": [
+            {
+              "name": "Get All Users",
+              "description": "Admin endpoint to list all customer users with pagination and search.\n\n📋 FILTER PARAMETERS:\n\n1. **Text Search (optional):**\n   - q (string): Search across multiple fields using AND logic:\n     • firstName (case-insensitive partial match)\n     • lastName (case-insensitive partial match)\n     • email (case-insensitive partial match)\n     • phone (case-insensitive partial match)\n   - Example: q=john returns users with \"john\" in firstName, lastName, email, or phone\n\n2. **Role Filter (optional):**\n   - role (string): Filter by user role\n     • Default: CUSTOMER (if not specified)\n     • Values: CUSTOMER, ADMIN\n   - Note: This endpoint always returns CUSTOMER users by default\n\n3. **Pagination:**\n   - page (number): Page number (default: 1, minimum: 1)\n   - limit (number): Items per page (default: 50, maximum: 100)\n   - Skip = (page - 1) × limit\n\n🔒 Admin-only endpoint - requires adminToken\n\n⚙️ RESPONSE:\n- Returns paginated list of users with metadata\n- meta includes: total, page, limit, totalPages, count, hasNext, hasPrev\n- User fields: id, email, firstName, lastName, phone, role, status, isEmailVerified, createdAt\n\n🎯 EXAMPLES:\n1. GET /api/admin/users?page=1&limit=20\n   → Returns first 20 customers\n\n2. GET /api/admin/users?q=john&limit=10\n   → Returns customers matching \"john\" (up to 10 results)\n\n3. GET /api/admin/users?q=john@example.com&page=2&limit=50\n   → Returns customers with email containing \"john@example.com\" (page 2, 50 per page)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/users?page=1&limit=10",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number for pagination (default: 1). Skip = (page - 1) × limit"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10",
+                      "description": "Items per page (default: 50, maximum: 100). Controls how many users are returned per page."
+                    },
+                    {
+                      "key": "q",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Search query - searches firstName, lastName, email, phone fields with AND logic (case-insensitive). Optional parameter."
+                    },
+                    {
+                      "key": "role",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Filter by user role: CUSTOMER or ADMIN. Default is CUSTOMER if not specified. Optional parameter."
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get User By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/users/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update User",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"UpdatedName\",\n  \"role\": \"ADMIN\",\n  \"status\": \"SUSPENDED\"  \n}\n",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/users/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "sell requests",
+          "item": [
+            {
+              "name": "Get Sell Requests (Admin)",
+              "description": "Admin endpoint to list all sell requests with pagination, filtering, and search.\n\n📋 FILTER PARAMETERS:\n\n1. **Status Filtering (optional):**\n   - status (string): Filter sell requests by status\n     • SUBMITTED - Initial request submitted\n     • RECEIVED - Device received by admin\n     • INSPECTION - Device under inspection\n     • OFFER_MADE - Price offer made to user\n     • PAID - Payment completed\n     • REJECTED - Request rejected\n   - If not provided: Returns all requests regardless of status\n\n2. **Device Model Filtering (optional):**\n   - deviceModelId (string): Filter by specific device model UUID\n   - Example: deviceModelId=abc123 returns requests for iPhone 14 Pro\n\n3. **Text Search (optional):**\n   - search (string): Search by user details (case-insensitive partial match)\n     • Searches in: firstName, lastName, email, phone\n     • AND logic applied (must match search term)\n   - Example: search=john returns requests from \"John Doe\", \"johnny\", \"john@email.com\"\n\n4. **Pagination:**\n   - page (number): Page number (default: 1, minimum: 1)\n   - limit (number): Items per page (default: 20, maximum: 100)\n   - Skip = (page - 1) × limit\n\n⚙️ SORTING:\n- Results sorted by createdAt in descending order (newest first)\n\n🔒 Admin-only endpoint - requires adminToken\n\n💾 RESPONSE FIELDS:\n- id: Sell request UUID\n- firstName, lastName: Customer name\n- email, phone: Customer contact\n- deviceModelName: Device model name\n- conditionName: Device condition\n- baseOfferPrice: Admin's offered price\n- userOfferedPrice: User's proposed price\n- status: Request status\n- createdAt, updatedAt: Timestamps\n- isDeleted: Soft-delete status\n- images: Array of device images\n\n🎯 EXAMPLES:\n1. GET /api/admin/sell-requests?page=1&limit=20\n   → Returns first 20 sell requests (all statuses)\n\n2. GET /api/admin/sell-requests?status=INSPECTION&page=1&limit=15\n   → Returns sell requests currently under inspection\n\n3. GET /api/admin/sell-requests?deviceModelId=xyz&page=1\n   → Returns iPhone 14 Pro sell requests\n\n4. GET /api/admin/sell-requests?search=john&status=OFFER_MADE&limit=10\n   → Returns sell requests from \"john\" with offer made (10 per page)\n\n5. GET /api/admin/sell-requests?status=PAID&limit=50&page=2\n   → Returns paid sell requests (page 2, 50 per page)\n\n📊 PAGINATION METADATA:\n- Response includes meta with: page, limit, total, hasNext, hasPrevious",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/sell-requests?page=1&limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "sell-requests"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number for pagination (default: 1). Skip = (page - 1) × limit"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20",
+                      "description": "Items per page (default: 20, maximum: 100). Controls how many sell requests are returned per page."
+                    },
+                    {
+                      "key": "status",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Filter by request status: SUBMITTED, RECEIVED, INSPECTION, OFFER_MADE, PAID, or REJECTED. Optional parameter."
+                    },
+                    {
+                      "key": "deviceModelId",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Filter by device model UUID. Returns requests for specific device model. Optional parameter."
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Search by user details - searches firstName, lastName, email, phone (case-insensitive partial match). Optional parameter."
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Sell Request By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/sell-requests/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "sell-requests",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "{{sellRequestId}}"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Sell Request (Admin)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"CONTRACTED\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/sell-requests/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "sell-requests",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "{{sellRequestId}}"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Sell Request (Admin)",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/sell-requests/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "sell-requests",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "{{sellRequestId}}"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "orders",
+          "item": [
+            {
+              "name": "Get Order Stats",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/orders/stats",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "orders",
+                    "stats"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get All Orders",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "description": "Admin endpoint to retrieve all orders with pagination and optional status filtering.\n\n📋 FILTER PARAMETERS:\n\n1. **Status Filtering (optional):**\n   - status (string): Filter orders by order status\n     • PENDING - Order created, awaiting payment\n     • PROCESSING - Payment received, order being prepared\n     • SHIPPED - Order sent to customer\n     • DELIVERED - Order delivered to customer\n     • CANCELLED - Order cancelled by user (includes cancelledAt and cancellationReason)\n   - If not provided: Returns ALL orders regardless of status\n\n2. **Pagination:**\n   - page (number): Page number (default: 1, minimum: 1)\n   - limit (number): Items per page (default: 50, maximum: 100)\n   - Skip = (page - 1) × limit\n\n🔒 Admin-only endpoint - requires adminToken\n\n💾 RESPONSE FIELDS:\n- id: Order UUID\n- stringId: Order display ID (e.g., ORD-XYZ123)\n- userId: Customer user ID\n- orderStatus: Status (PENDING, PROCESSING, SHIPPED, DELIVERED, CANCELLED)\n- totalPrice: Final price after discounts\n- shippingCost: Shipping charges\n- discountTotal: Applied discount amount\n- promoCodeUsed: Promo code if applied\n- paymentStatus: PENDING, AUTHORIZED, PAID, FAILED\n- paymentMethod: STRIPE or other payment method\n- shippingAddress: Full address object (fullName, phone, street, city, state, zipCode, country)\n- orderItems: Array of items with product, color, storage, RAM details\n- **cancelledAt**: Timestamp when order was cancelled (only for CANCELLED orders)\n- **cancellationReason**: Reason provided by user for cancellation (only for CANCELLED orders)\n- createdAt: Order creation timestamp\n- updatedAt: Last update timestamp\n\n🎯 EXAMPLES:\n1. GET /api/admin/orders?page=1&limit=20\n   → Returns all orders (all statuses), paginated\n\n2. GET /api/admin/orders?status=CANCELLED&page=1&limit=50\n   → Returns only cancelled orders with cancellation reasons\n\n3. GET /api/admin/orders?status=PROCESSING&limit=10\n   → Returns orders being processed (first 10)\n\n4. GET /api/admin/orders?status=DELIVERED&page=2&limit=25\n   → Returns delivered orders (page 2, 25 per page)",
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/orders?page=1&limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "orders"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number for pagination (default: 1). Skip = (page - 1) × limit"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20",
+                      "description": "Items per page (default: 50, maximum: 100). Controls how many orders are returned per page."
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Order By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/orders/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "orders",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Order Status",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"PROCESSING\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/orders/:id/status",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "orders",
+                    ":id",
+                    "status"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Order",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/orders/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "orders",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "email",
+      "value": "admin@zephyrtechno.com"
+    },
+    {
+      "key": "otp",
+      "value": "123456"
+    },
+    {
+      "key": "resetOtp",
+      "value": "123456"
+    },
+    {
+      "key": "password",
+      "value": "Admin@1234"
+    },
+    {
+      "key": "newPassword",
+      "value": "NewPassword123!"
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "userToken",
+      "value": ""
+    },
+    {
+      "key": "seriesId",
+      "value": ""
+    },
+    {
+      "key": "deviceModelId",
+      "value": ""
+    },
+    {
+      "key": "conditionId",
+      "value": ""
+    },
+    {
+      "key": "sellRequestId",
+      "value": ""
+    },
+    {
+      "key": "productId",
+      "value": ""
+    },
+    {
+      "key": "colorId",
+      "value": ""
+    },
+    {
+      "key": "storageOptionId",
+      "value": ""
+    },
+    {
+      "key": "ramOptionId",
+      "value": ""
+    },
+    {
+      "key": "cartItemId",
+      "value": ""
+    },
+    {
+      "key": "guestSessionId",
+      "value": ""
+    },
+    {
+      "key": "promoCode",
+      "value": "SUMMER25"
+    }
+  ]
+}
