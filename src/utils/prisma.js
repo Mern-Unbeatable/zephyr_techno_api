@@ -3,8 +3,6 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import AppError from './app-error.js';
 import env from '../config/env.js';
 
-const globalForPrisma = globalThis;
-
 const connectionString = env.databaseUrl;
 
 if (!connectionString) {
@@ -22,11 +20,11 @@ const adapter = new PrismaPg({
   }
 });
 
-const basePrisma = globalForPrisma.prisma ?? new PrismaClient({ 
+const basePrisma = new PrismaClient({
   adapter,
-  log: process.env.NODE_ENV === 'development' 
-    ? ['warn', 'error'] 
-    : ['error'],  // Reduce logging overhead in production
+  log: env.nodeEnv === 'development'
+    ? ['warn', 'error']
+    : ['error'],
 });
 
 const prisma = basePrisma.$extends({
@@ -126,9 +124,5 @@ const prisma = basePrisma.$extends({
     },
   },
 });
-
-if (env.nodeEnv !== 'production') {
-  globalForPrisma.prisma = basePrisma;
-}
 
 export default prisma;

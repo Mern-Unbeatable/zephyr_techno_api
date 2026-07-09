@@ -25,10 +25,14 @@ class AttributesService {
   async createCategory({ name }) {
     name = this.#requireString(name, 'Category name');
     const deletedRecord = await this.#checkUniqueAndGetDeleted('category', { name }, 'Category name already exists.');
+    let result;
     if (deletedRecord) {
-      return prisma.category.update({ where: { id: deletedRecord.id }, data: { isDeleted: false, deletedAt: null } });
+      result = await prisma.category.update({ where: { id: deletedRecord.id }, data: { isDeleted: false, deletedAt: null } });
+    } else {
+      result = await prisma.category.create({ data: { name } });
     }
-    return prisma.category.create({ data: { name } });
+    this.#invalidatePublicAttributesCache();
+    return result;
   }
 
   async getAllCategories() {
@@ -44,12 +48,16 @@ class AttributesService {
     name = this.#requireString(name, 'Category name');
     const deletedRecord = await this.#checkUniqueAndGetDeleted('category', { name }, 'Category name already exists.', id);
     if (deletedRecord) throw new AppError('Name is currently used by a deleted category. Please use a different name.', 409);
-    return prisma.category.update({ where: { id }, data: { name } });
+    const result = await prisma.category.update({ where: { id }, data: { name } });
+    this.#invalidatePublicAttributesCache();
+    return result;
   }
 
   async deleteCategory(id) {
     await this.#findOrFail('category', id, 'Category');
-    return this.#safeDelete('category', id, 'Category');
+    const result = await this.#safeDelete('category', id, 'Category');
+    this.#invalidatePublicAttributesCache();
+    return result;
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -544,35 +552,8 @@ class AttributesService {
     const conditions = opts.conditions || [];
     const categories = opts.categories || [];
 
-    // Find category IDs (case-insensitive)
-    const newCategory = categories.find((cat) => String(cat.name || '').toLowerCase() === 'new');
-    const usedCategory = categories.find((cat) => {
-      const lowerName = String(cat.name || '').toLowerCase();
-      return lowerName === 'used' || lowerName === 'old';
-    });
-
-    // Separate conditions: New vs Used conditions
-    const newCondition = conditions.find((c) => String(c.name || '').toLowerCase() === 'new');
-    const usedConditions = conditions.filter((c) => String(c.name || '').toLowerCase() !== 'new');
-
     const response = {
-      // Filtering structure: Category-based filtering with sub-conditions for Used
-      categoryFilters: [
-        { key: 'ALL', name: 'All', categoryId: null, conditions: [] },
-        { 
-          key: 'NEW', 
-          name: 'New', 
-          categoryId: newCategory?.id || null,
-          conditionId: newCondition?.id || null,
-          conditions: [] 
-        },
-        { 
-          key: 'USED', 
-          name: 'Used', 
-          categoryId: usedCategory?.id || null,
-          conditions: usedConditions 
-        },
-      ],
+      categoryFilters: this.#buildCategoryFilters(categories, conditions),
       // All attributes for product forms
       categories: categories,
       conditions: conditions,
@@ -589,6 +570,92 @@ class AttributesService {
   // ─────────────────────────────────────────────────────────────
   // PRIVATE HELPERS
   // ─────────────────────────────────────────────────────────────
+
+  #invalidatePublicAttributesCache() {
+    this._publicAttributesCache = { ts: 0, data: null };
+  }
+
+  #normalizeName(value) {
+    return String(value || '').toLowerCase().trim();
+  }
+
+  #buildCategoryFilters(categories = [], conditions = []) {
+    const findCategory = (...names) =>
+      categories.find((cat) => names.includes(this.#normalizeName(cat.name)));
+
+    const newCategory = findCategory('new');
+    const sealedCategory = findCategory('sealed');
+    const usedCategory = findCategory('used', 'old');
+
+    const newCondition = conditions.find(
+      (c) => this.#normalizeName(c.name) === 'new',
+    );
+    const usedConditions = conditions.filter(
+      (c) => this.#normalizeName(c.name) !== 'new',
+    );
+
+    const filters = [
+      { key: 'ALL', name: 'All', categoryId: null, conditionId: null, conditions: [] },
+    ];
+
+    const orderedEntries = [
+      {
+        category: newCategory,
+        key: 'NEW',
+        displayName: newCategory?.name || 'New',
+        conditionId: newCondition?.id || null,
+        conditions: [],
+      },
+      {
+        category: sealedCategory,
+        key: 'SEALED',
+        displayName: sealedCategory?.name || 'Sealed',
+        conditionId: null,
+        conditions: [],
+      },
+      {
+        category: usedCategory,
+        key: 'USED',
+        displayName:
+          usedCategory && this.#normalizeName(usedCategory.name) === 'old'
+            ? 'Used'
+            : usedCategory?.name || 'Used',
+        conditionId: null,
+        conditions: usedConditions,
+      },
+    ];
+
+    const includedCategoryIds = new Set();
+
+    for (const entry of orderedEntries) {
+      if (!entry.category) continue;
+      includedCategoryIds.add(entry.category.id);
+      filters.push({
+        key: entry.key,
+        name: entry.displayName,
+        categoryId: entry.category.id,
+        conditionId: entry.conditionId ?? null,
+        conditions: entry.conditions || [],
+      });
+    }
+
+    for (const category of categories) {
+      if (includedCategoryIds.has(category.id)) continue;
+      const key = this.#normalizeName(category.name)
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_|_$/g, '')
+        .toUpperCase() || 'CATEGORY';
+      filters.push({
+        key,
+        name: category.name,
+        categoryId: category.id,
+        conditionId: null,
+        conditions: [],
+      });
+    }
+
+    return filters;
+  }
 
   #requireString(value, fieldName) {
     const result = String(value || '').trim();

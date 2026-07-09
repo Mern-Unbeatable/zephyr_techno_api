@@ -2,12 +2,35 @@ import prisma from "../utils/prisma.js";
 import AppError from "../utils/app-error.js";
 import { buildImageUrl } from "../utils/url.js";
 import promoService from "./promo.service.js";
+import { resolveStorageStock, resolveStoragePrice, syncProductStockTotal } from "../utils/stock.js";
 
 /**
  * OrderService
  * Handles order creation and management
  */
 class OrderService {
+  async #getItemStorageStock(item) {
+    const bridge = await prisma.productStorageOption.findFirst({
+      where: {
+        productId: item.productId,
+        storageOptionId: item.storageOptionId,
+      },
+      select: { stockQuantity: true },
+    });
+    return resolveStorageStock(bridge, item.product.stockQuantity);
+  }
+
+  async #getItemUnitPrice(item) {
+    const bridge = await prisma.productStorageOption.findFirst({
+      where: {
+        productId: item.productId,
+        storageOptionId: item.storageOptionId,
+      },
+      select: { price: true },
+    });
+    return resolveStoragePrice(bridge, item.product.basePrice);
+  }
+
   /**
    * Create order from cart (checkout) or direct product
    * Supports both authenticated users and guest checkout
@@ -57,6 +80,8 @@ class OrderService {
           id: true,
           title: true,
           basePrice: true,
+          stockQuantity: true,
+          listingStatus: true,
           seriesId: true,
           deviceModelId: true,
         },
@@ -134,17 +159,26 @@ class OrderService {
         );
       }
 
-      if (item.product.stockQuantity < item.quantity) {
+      const availableStock = await this.#getItemStorageStock(item);
+      if (availableStock < item.quantity) {
         throw new AppError(
-          `Insufficient stock for "${item.product.title}". Only ${item.product.stockQuantity} available.`,
+          `Insufficient stock for "${item.product.title}". Only ${availableStock} available.`,
           400,
         );
       }
     }
 
-    // Calculate order total
+    // Calculate order total using per-storage prices
+    const pricedItems = await Promise.all(
+      cartItems.map(async (item) => ({
+        ...item,
+        unitPrice: await this.#getItemUnitPrice(item),
+      })),
+    );
+    cartItems = pricedItems;
+
     const orderTotal = cartItems.reduce(
-      (sum, item) => sum + item.product.basePrice * item.quantity,
+      (sum, item) => sum + item.unitPrice * item.quantity,
       0,
     );
 
@@ -212,7 +246,7 @@ class OrderService {
               storageOptionId: item.storageOptionId,
               ramOptionId: item.ramOptionId,
               quantity: item.quantity,
-              priceAtPurchase: item.product.basePrice,
+              priceAtPurchase: item.unitPrice,
             })),
           },
         },
@@ -264,8 +298,9 @@ class OrderService {
         productId: item.productId,
         title: item.product.title,
         quantity: item.quantity,
-        priceAtPurchase: parseFloat(item.product.basePrice),
-        subtotal: parseFloat(item.product.basePrice) * item.quantity,
+        priceAtPurchase: parseFloat(item.unitPrice ?? item.product.basePrice),
+        subtotal:
+          parseFloat(item.unitPrice ?? item.product.basePrice) * item.quantity,
       })),
       createdAt: order.order.createdAt,
       updatedAt: order.order.updatedAt,
@@ -546,7 +581,15 @@ class OrderService {
         if (!product) {
           throw new AppError(`Product not found for order item ${item.id}`, 404);
         }
-        if (product.stockQuantity < item.quantity) {
+        const bridge = await tx.productStorageOption.findFirst({
+          where: {
+            productId: item.productId,
+            storageOptionId: item.storageOptionId,
+          },
+          select: { stockQuantity: true },
+        });
+        const availableStock = resolveStorageStock(bridge, product.stockQuantity);
+        if (availableStock < item.quantity) {
           throw new AppError(
             `Insufficient stock to confirm payment for "${product.title}".`,
             400,
@@ -554,12 +597,21 @@ class OrderService {
         }
       }
 
-      // Decrement stock only after payment is confirmed.
+      // Decrement per-storage stock only after payment is confirmed.
+      const touchedProductIds = new Set();
       for (const item of existing.orderItems) {
-        await tx.product.update({
-          where: { id: item.productId },
+        await tx.productStorageOption.updateMany({
+          where: {
+            productId: item.productId,
+            storageOptionId: item.storageOptionId,
+          },
           data: { stockQuantity: { decrement: item.quantity } },
         });
+        touchedProductIds.add(item.productId);
+      }
+
+      for (const productId of touchedProductIds) {
+        await syncProductStockTotal(tx, productId);
       }
 
       // Clear matching cart items for authenticated users only.

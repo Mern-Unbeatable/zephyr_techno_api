@@ -1,0 +1,4 @@
+{
+  "watch": ["src", "node_modules/.prisma/client"],
+  "ext": "js,json,prisma"
+}

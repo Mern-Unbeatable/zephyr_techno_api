@@ -1,6 +1,7 @@
 import prisma from "../utils/prisma.js";
 import AppError from "../utils/app-error.js";
 import { buildImageUrl } from "../utils/url.js";
+import { resolveStorageStock, resolveStoragePrice } from "../utils/stock.js";
 
 /**
  * CartService
@@ -64,12 +65,16 @@ class CartService {
       throw new AppError("Selected RAM option is not available for this product", 400);
     }
 
-    // Check stock availability
-    if (product.stockQuantity <= 0) {
+    // Check stock availability for the selected storage option
+    const storageStock = resolveStorageStock(
+      product.storageOptions[0],
+      product.stockQuantity,
+    );
+    if (storageStock <= 0) {
       throw new AppError("Product is currently out of stock", 400);
     }
-    if (product.stockQuantity < qty) {
-      throw new AppError(`Cannot add ${qty} items. Only ${product.stockQuantity} item(s) in stock`, 400);
+    if (storageStock < qty) {
+      throw new AppError(`Cannot add ${qty} items. Only ${storageStock} item(s) in stock`, 400);
     }
 
     // Ensure cart exists (create if missing)
@@ -103,14 +108,14 @@ class CartService {
       const newQuantity = existingCartItem.quantity + qty;
 
       // Validate against stock
-      if (product.stockQuantity < newQuantity) {
-        if (product.stockQuantity <= existingCartItem.quantity) {
+      if (storageStock < newQuantity) {
+        if (storageStock <= existingCartItem.quantity) {
           throw new AppError(
-            `Cannot add more. You already have all available items (${product.stockQuantity}) in your cart.`,
+            `Cannot add more. You already have all available items (${storageStock}) in your cart.`,
             400,
           );
         } else {
-          const remaining = product.stockQuantity - existingCartItem.quantity;
+          const remaining = storageStock - existingCartItem.quantity;
           throw new AppError(
             `Cannot add ${qty} more. You can only add ${remaining} more item(s).`,
             400,
@@ -127,6 +132,9 @@ class CartService {
               productGalleries: {
                 orderBy: { displayOrder: 'asc' },
                 take: 1,
+              },
+              storageOptions: {
+                select: { storageOptionId: true, stockQuantity: true, price: true },
               },
             },
           },
@@ -162,6 +170,9 @@ class CartService {
               orderBy: { displayOrder: 'asc' },
               take: 1,
             },
+            storageOptions: {
+              select: { storageOptionId: true, stockQuantity: true, price: true },
+            },
           },
         },
         color: true,
@@ -196,6 +207,9 @@ class CartService {
                 productGalleries: {
                   orderBy: { displayOrder: 'asc' },
                   take: 1,
+                },
+                storageOptions: {
+                  select: { storageOptionId: true, stockQuantity: true, price: true },
                 },
               },
             },
@@ -283,12 +297,20 @@ class CartService {
       throw new AppError('Unauthorized to modify this cart item', 403);
     }
 
-    // Check stock
-    if (cartItem.product.stockQuantity < qty) {
-      throw new AppError(
-        `Only ${cartItem.product.stockQuantity} items in stock`,
-        400,
-      );
+    // Check stock for the selected storage option
+    const storageBridge = await prisma.productStorageOption.findFirst({
+      where: {
+        productId: cartItem.productId,
+        storageOptionId: cartItem.storageOptionId,
+      },
+      select: { stockQuantity: true },
+    });
+    const storageStock = resolveStorageStock(
+      storageBridge,
+      cartItem.product.stockQuantity,
+    );
+    if (storageStock < qty) {
+      throw new AppError(`Only ${storageStock} items in stock`, 400);
     }
 
     const updated = await prisma.cartItem.update({
@@ -300,6 +322,9 @@ class CartService {
             productGalleries: {
               orderBy: { displayOrder: "asc" },
               take: 1,
+            },
+            storageOptions: {
+              select: { storageOptionId: true, stockQuantity: true, price: true },
             },
           },
         },
@@ -393,6 +418,17 @@ class CartService {
     const thumbnail = item.product.productGalleries?.[0]
       ? buildImageUrl(item.product.productGalleries[0].imageUrl)
       : null;
+    const storageBridge = item.product.storageOptions?.find(
+      (row) => row.storageOptionId === item.storageOptionId,
+    );
+    const storageStock = resolveStorageStock(
+      storageBridge,
+      item.product.stockQuantity,
+    );
+    const unitPrice = resolveStoragePrice(
+      storageBridge,
+      item.product.basePrice,
+    );
 
     return {
       id: item.id,
@@ -400,8 +436,8 @@ class CartService {
       product: {
         id: item.product.id,
         title: item.product.title,
-        basePrice: item.product.basePrice,
-        stockQuantity: item.product.stockQuantity,
+        basePrice: unitPrice,
+        stockQuantity: storageStock,
         seriesId: item.product.seriesId,
         deviceModelId: item.product.deviceModelId,
         thumbnail,
@@ -421,7 +457,7 @@ class CartService {
         },
       },
       // Calculate item total (price × quantity)
-      total: item.product.basePrice * item.quantity,
+      total: unitPrice * item.quantity,
       createdAt: item.createdAt,
     };
   }
@@ -481,8 +517,19 @@ class CartService {
             where: { id: guestItem.productId },
             select: { stockQuantity: true },
           });
+          const storageBridge = await prisma.productStorageOption.findFirst({
+            where: {
+              productId: guestItem.productId,
+              storageOptionId: guestItem.storageOptionId,
+            },
+            select: { stockQuantity: true },
+          });
+          const storageStock = resolveStorageStock(
+            storageBridge,
+            product?.stockQuantity ?? 0,
+          );
 
-          if (product && product.stockQuantity >= newQuantity) {
+          if (storageStock >= newQuantity) {
             await prisma.cartItem.update({
               where: { id: existingItem.id },
               data: { quantity: newQuantity },

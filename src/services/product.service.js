@@ -1,8 +1,16 @@
 import prisma from "../utils/prisma.js";
 import AppError from "../utils/app-error.js";
 import { buildImageUrl } from "../utils/url.js";
+import { sumStorageStocks, minStoragePrice } from "../utils/stock.js";
 
 class ProductService {
+  #activeGalleryInclude = {
+    where: { isDeleted: false },
+    orderBy: { displayOrder: 'asc' },
+  };
+
+  #transactionOptions = { timeout: 30000 };
+
   /**
    * Helper to format product images
    */
@@ -14,6 +22,130 @@ class ProductService {
       displayOrder: gallery.displayOrder,
       colorId: gallery.colorId || null,
     }));
+  }
+
+  #parseStorageVariants(raw, storageIds, { fallbackStock = 0, fallbackPrice = null } = {}) {
+    const allowed = new Set(storageIds || []);
+    if (!storageIds?.length) {
+      return new Map();
+    }
+
+    let entries = raw;
+    if (entries === undefined || entries === null || entries === '') {
+      return new Map(
+        storageIds.map((id) => [
+          id,
+          {
+            stockQuantity: Math.max(0, Number(fallbackStock) || 0),
+            price:
+              fallbackPrice != null && fallbackPrice !== ''
+                ? Math.max(0, Number(fallbackPrice) || 0)
+                : null,
+          },
+        ]),
+      );
+    }
+
+    if (typeof entries === 'string') {
+      entries = this.#parseJsonField(entries, 'storageStocks');
+    }
+
+    if (!Array.isArray(entries)) {
+      throw new AppError(
+        'Invalid storageStocks format. Must be a valid JSON array.',
+        400,
+      );
+    }
+
+    const variantMap = new Map();
+    for (const entry of entries) {
+      const storageOptionId = entry?.storageOptionId || entry?.id;
+      if (!storageOptionId || !allowed.has(storageOptionId)) continue;
+
+      const price =
+        entry?.price !== undefined && entry?.price !== null && entry?.price !== ''
+          ? Math.max(0, Number(entry.price) || 0)
+          : fallbackPrice != null && fallbackPrice !== ''
+            ? Math.max(0, Number(fallbackPrice) || 0)
+            : null;
+
+      variantMap.set(storageOptionId, {
+        stockQuantity: Math.max(0, parseInt(entry.stockQuantity, 10) || 0),
+        price,
+      });
+    }
+
+    for (const storageOptionId of storageIds) {
+      if (!variantMap.has(storageOptionId)) {
+        variantMap.set(storageOptionId, {
+          stockQuantity: Math.max(0, Number(fallbackStock) || 0),
+          price:
+            fallbackPrice != null && fallbackPrice !== ''
+              ? Math.max(0, Number(fallbackPrice) || 0)
+              : null,
+        });
+      }
+    }
+
+    return variantMap;
+  }
+
+  #variantMapToRows(variantMap) {
+    return [...variantMap.entries()].map(([storageOptionId, variant]) => ({
+      storageOptionId,
+      stockQuantity: variant.stockQuantity ?? 0,
+      price: variant.price,
+    }));
+  }
+
+  async #syncProductStorageOptions(tx, productId, storageIds, variantMap) {
+    const existing = await tx.productStorageOption.findMany({
+      where: { productId },
+      includeDeleted: true,
+      select: { id: true, storageOptionId: true },
+    });
+    const existingByStorageId = new Map(
+      existing.map((row) => [row.storageOptionId, row]),
+    );
+    const targetIds = new Set(storageIds);
+
+    await Promise.all(
+      existing
+        .filter((row) => !targetIds.has(row.storageOptionId))
+        .map((row) => tx.productStorageOption.delete({ where: { id: row.id } })),
+    );
+
+    await Promise.all(
+      storageIds.map(async (storageOptionId) => {
+        const variant = variantMap.get(storageOptionId) ?? {
+          stockQuantity: 0,
+          price: null,
+        };
+        const current = existingByStorageId.get(storageOptionId);
+
+        if (current) {
+          await tx.productStorageOption.update({
+            where: { id: current.id },
+            data: {
+              stockQuantity: variant.stockQuantity ?? 0,
+              ...(variant.price != null ? { price: variant.price } : {}),
+              isDeleted: false,
+              deletedAt: null,
+            },
+          });
+          return;
+        }
+
+        await tx.productStorageOption.create({
+          data: {
+            productId,
+            storageOptionId,
+            stockQuantity: variant.stockQuantity ?? 0,
+            ...(variant.price != null ? { price: variant.price } : {}),
+          },
+        });
+      }),
+    );
   }
 
   #parseJsonField(val, fieldName) {
@@ -74,13 +206,21 @@ class ProductService {
    * - Formats image URLs
    */
   #formatProduct(product) {
+    const availableColorIds = new Set(
+      (product.colors || []).map((pc) => pc.color.id),
+    );
+    const galleries = (product.productGalleries || []).filter(
+      (gallery) => !gallery.colorId || availableColorIds.has(gallery.colorId),
+    );
+
     return {
       id: product.id,
       title: product.title,
       description: product.description,
       introduction: product.introduction,
       basePrice: product.basePrice,
-      stockQuantity: product.stockQuantity || 0,
+      stockQuantity:
+        sumStorageStocks(product.storageOptions) || product.stockQuantity || 0,
       listingStatus: product.listingStatus,
       isFeatured: Boolean(product.isFeatured || false),
       featuredAt: product.featuredAt || null,
@@ -101,8 +241,8 @@ class ProductService {
         ? { id: product.condition.id, name: product.condition.name }
         : null,
 
-      // Images with full URLs
-      images: this.#formatProductGallery(product.productGalleries || []),
+      // Images with full URLs (exclude images for colors no longer on the product)
+      images: this.#formatProductGallery(galleries),
 
       // FAQs - clean
       faqs: (product.productFaqs || []).map((f) => ({
@@ -140,6 +280,11 @@ class ProductService {
       availableStorageOptions: (product.storageOptions || []).map((ps) => ({
         id: ps.storageOption.id,
         name: ps.storageOption.name,
+        stockQuantity: ps.stockQuantity ?? 0,
+        price:
+          ps.price != null
+            ? parseFloat(ps.price)
+            : parseFloat(product.basePrice),
       })),
       availableRamOptions: (product.ramOptions || []).map((pr) => ({
         id: pr.ramOption.id,
@@ -162,7 +307,8 @@ class ProductService {
       id: product.id,
       title: product.title,
       basePrice: product.basePrice,
-      stockQuantity: product.stockQuantity || 0,
+      stockQuantity:
+        sumStorageStocks(product.storageOptions) || product.stockQuantity || 0,
       listingStatus: product.listingStatus,
       thumbnail,
       category: product.category
@@ -215,13 +361,12 @@ class ProductService {
     // Validate required fields (conditionId is optional when category is "New")
     if (
       !title ||
-      !basePrice ||
       !categoryId ||
       !seriesId ||
       !deviceModelId
     ) {
       throw new AppError(
-        "Missing required product fields (title, basePrice, categoryId, seriesId, deviceModelId)",
+        "Missing required product fields (title, categoryId, seriesId, deviceModelId)",
         400,
       );
     }
@@ -232,9 +377,9 @@ class ProductService {
 
     const categoryNameLower = String(category.name || '').toLowerCase();
 
-    // "New" category products have no condition (conditionId = null)
+    // "New" and "Sealed" category products have no condition (conditionId = null)
     let resolvedConditionId = null;
-    if (categoryNameLower === 'new') {
+    if (categoryNameLower === 'new' || categoryNameLower === 'sealed') {
       resolvedConditionId = null;
     } else {
       // For non-"New" categories, conditionId is required
@@ -365,8 +510,41 @@ class ProductService {
       }
     }
 
-    const parsedStock = parseInt(stockQuantity) || 0;
-    const parsedPrice = Number(basePrice);
+    const parsedStock = parseInt(stockQuantity, 10) || 0;
+    const parsedPrice =
+      basePrice !== undefined && basePrice !== null && basePrice !== ''
+        ? Number(basePrice)
+        : null;
+    const storageVariantMap = this.#parseStorageVariants(
+      data.storageStocks,
+      storages,
+      { fallbackStock: parsedStock, fallbackPrice: parsedPrice },
+    );
+    const storageVariantRows = this.#variantMapToRows(storageVariantMap);
+    const totalStock = sumStorageStocks(storageVariantRows);
+    const productBasePrice = minStoragePrice(storageVariantRows, parsedPrice);
+
+    if (!storages.length && (parsedPrice == null || Number.isNaN(parsedPrice))) {
+      throw new AppError(
+        'Missing required product fields (title, basePrice, categoryId, seriesId, deviceModelId)',
+        400,
+      );
+    }
+
+    if (storages.length) {
+      const missingPrices = storages.filter((storageId) => {
+        const variant = storageVariantMap.get(storageId);
+        return !variant?.price || variant.price <= 0;
+      });
+      if (missingPrices.length > 0) {
+        throw new AppError(
+          'Each selected storage option must have a price greater than 0.',
+          400,
+        );
+      }
+    } else if (parsedPrice == null || Number.isNaN(parsedPrice) || parsedPrice <= 0) {
+      throw new AppError('basePrice must be a positive number.', 400);
+    }
 
     // Create product with bridge records in a transaction
     const product = await prisma.$transaction(async (tx) => {
@@ -375,8 +553,8 @@ class ProductService {
           title,
           description,
           introduction,
-          basePrice: parsedPrice,
-          stockQuantity: parsedStock,
+          basePrice: productBasePrice,
+          stockQuantity: totalStock,
           listingStatus: listingStatus || "INACTIVE",
           categoryId,
           seriesId,
@@ -396,9 +574,17 @@ class ProductService {
             create: colors.map((colorId) => ({ colorId })),
           },
           storageOptions: {
-            create: storages.map((storageId) => ({
-              storageOptionId: storageId,
-            })),
+            create: storages.map((storageId) => {
+              const variant = storageVariantMap.get(storageId) ?? {
+                stockQuantity: 0,
+                price: productBasePrice,
+              };
+              return {
+                storageOptionId: storageId,
+                stockQuantity: variant.stockQuantity ?? 0,
+                price: variant.price ?? productBasePrice,
+              };
+            }),
           },
           ramOptions: {
             create: rams.map((ramId) => ({ ramOptionId: ramId })),
@@ -501,7 +687,7 @@ class ProductService {
         deviceModel: { select: { id: true, name: true } },
         condition: { select: { id: true, name: true } },
         productGalleries: {
-          orderBy: { displayOrder: 'asc' },
+          ...this.#activeGalleryInclude,
           take: 1,
         },
         colors: { select: { colorId: true } },
@@ -529,7 +715,7 @@ class ProductService {
         series: { select: { id: true, name: true } },
         deviceModel: { select: { id: true, name: true } },
         condition: { select: { id: true, name: true } },
-        productGalleries: true,
+        productGalleries: this.#activeGalleryInclude,
         productFaqs: true,
         highlights: true,
         specifications: true,
@@ -569,8 +755,8 @@ class ProductService {
         },
         include: {
           productGalleries: {
+            ...this.#activeGalleryInclude,
             take: 1,
-            orderBy: { displayOrder: 'asc' },
           },
           series: { select: { id: true, name: true } },
         },
@@ -647,100 +833,268 @@ class ProductService {
     if (data.storageOptionIds) parsedStorages = parseArray(data.storageOptionIds);
     if (data.ramOptionIds) parsedRams = parseArray(data.ramOptionIds);
 
-    // Use transaction for all operations
+    let existingStorageIds = null;
+    if (!parsedStorages) {
+      const existingStorages = await prisma.productStorageOption.findMany({
+        where: { productId: id },
+        select: { storageOptionId: true },
+      });
+      existingStorageIds = existingStorages.map((row) => row.storageOptionId);
+    }
+
+    const storageIdsForStock = parsedStorages || existingStorageIds || [];
+    const fallbackStock =
+      data.stockQuantity !== undefined
+        ? parseInt(data.stockQuantity, 10) || 0
+        : 0;
+    const fallbackPrice =
+      data.basePrice !== undefined && data.basePrice !== null && data.basePrice !== ''
+        ? Number(data.basePrice)
+        : null;
+    const shouldSyncStorageVariants =
+      data.storageStocks !== undefined || parsedStorages;
+    const storageVariantMap = shouldSyncStorageVariants
+      ? this.#parseStorageVariants(
+          data.storageStocks,
+          storageIdsForStock,
+          { fallbackStock, fallbackPrice },
+        )
+      : null;
+
+    const updateData = {};
+    const allowedFields = [
+      "title",
+      "description",
+      "introduction",
+      "basePrice",
+      "listingStatus",
+    ];
+
+    for (const field of allowedFields) {
+      if (data[field] !== undefined) {
+        updateData[field] =
+          field === "basePrice"
+            ? Number(data[field])
+            : data[field];
+      }
+    }
+
+    if (data.categoryId || data.conditionId) {
+      const current = await prisma.product.findUnique({
+        where: { id },
+        select: { categoryId: true, conditionId: true },
+      });
+      if (!current) throw new AppError('Product not found.', 404);
+
+      const finalCategoryId = data.categoryId || current.categoryId;
+
+      const category = await prisma.category.findUnique({
+        where: { id: finalCategoryId },
+        select: { name: true },
+      });
+      if (!category) throw new AppError('Invalid category ID.', 400);
+
+      const categoryNameLower = String(category.name || '').toLowerCase();
+
+      if (categoryNameLower === 'new' || categoryNameLower === 'sealed') {
+        data.conditionId = null;
+      } else {
+        const finalConditionId = data.conditionId || current.conditionId;
+        const condition = await prisma.condition.findUnique({
+          where: { id: finalConditionId },
+          select: { name: true },
+        });
+        if (!condition) throw new AppError('Invalid condition ID.', 400);
+        if (
+          categoryNameLower === 'used' &&
+          String(condition.name || '').toLowerCase() === 'new'
+        ) {
+          throw new AppError(
+            'Products in "Used" category cannot have "New" condition.',
+            400,
+          );
+        }
+      }
+    }
+
+    if (data.categoryId) {
+      updateData.category = { connect: { id: data.categoryId } };
+    }
+    if (data.seriesId) updateData.series = { connect: { id: data.seriesId } };
+    if (data.deviceModelId) {
+      updateData.deviceModel = { connect: { id: data.deviceModelId } };
+    }
+    if (data.conditionId) {
+      updateData.condition = { connect: { id: data.conditionId } };
+    } else if (data.conditionId === null) {
+      updateData.condition = { disconnect: true };
+    }
+
+    const keptImages = data.keptImages
+      ? this.#parseJsonField(data.keptImages, 'keptImages')
+      : null;
+    const removedImageIds = data.removedImageIds
+      ? this.#parseJsonField(data.removedImageIds, 'removedImageIds')
+      : null;
+
+    if (keptImages !== null && !Array.isArray(keptImages)) {
+      throw new AppError('Invalid keptImages format. Must be a valid JSON array.', 400);
+    }
+    if (removedImageIds !== null && !Array.isArray(removedImageIds)) {
+      throw new AppError('Invalid removedImageIds format. Must be a valid JSON array.', 400);
+    }
+
+    let galleryColorIds = parsedColors;
+    if (!galleryColorIds) {
+      const existingColors = await prisma.productColor.findMany({
+        where: { productId: id },
+        select: { colorId: true },
+      });
+      galleryColorIds = existingColors.map((c) => c.colorId);
+    }
+
+    const newGalleries =
+      files && files.length > 0
+        ? this.#buildGalleriesFromUploads(files, data.imageMeta, galleryColorIds)
+        : [];
+
+    if (keptImages?.length) {
+      const allowedColors = new Set(galleryColorIds || []);
+      for (const img of keptImages) {
+        if (!img?.id) continue;
+        const colorId = img.colorId || null;
+        if (colorId && allowedColors.size > 0 && !allowedColors.has(colorId)) {
+          throw new AppError(
+            'keptImages colorId must match a selected product color.',
+            400,
+          );
+        }
+      }
+    }
+
+    if (parsedFaqs && Array.isArray(parsedFaqs)) {
+      updateData.productFaqs = {
+        deleteMany: {},
+        create: parsedFaqs.map((faq) => ({
+          question: faq.question,
+          answer: faq.answer,
+        })),
+      };
+    }
+
+    if (parsedHighlights && Array.isArray(parsedHighlights)) {
+      updateData.highlights = {
+        deleteMany: {},
+        create: parsedHighlights.map((h) => ({
+          title: h.title,
+          description: h.description,
+          iconUrl: h.iconUrl || null,
+          displayOrder: h.displayOrder || 0,
+        })),
+      };
+    }
+
+    if (parsedSpecs && Array.isArray(parsedSpecs)) {
+      updateData.specifications = {
+        deleteMany: {},
+        create: parsedSpecs.map((s) => ({
+          name: s.name,
+          value: s.value,
+          displayOrder: s.displayOrder || 0,
+        })),
+      };
+    }
+
+    if (parsedIncludedItems && Array.isArray(parsedIncludedItems)) {
+      updateData.includedItems = {
+        deleteMany: {},
+        create: parsedIncludedItems
+          .filter((item) => item?.label?.trim())
+          .map((item, index) => ({
+            label: item.label.trim(),
+            displayOrder: Number.isFinite(item.displayOrder)
+              ? item.displayOrder
+              : index,
+          })),
+      };
+    }
+
+    if (parsedColors && parsedColors.length > 0) {
+      updateData.colors = {
+        deleteMany: {},
+        create: parsedColors.map((colorId) => ({ colorId })),
+      };
+    }
+
+    let storageOptionsSync = null;
+
+    if (parsedStorages && parsedStorages.length > 0) {
+      const variantMap =
+        storageVariantMap ||
+        this.#parseStorageVariants(null, parsedStorages, {
+          fallbackStock,
+          fallbackPrice,
+        });
+      storageOptionsSync = {
+        storageIds: parsedStorages,
+        variantMap,
+      };
+      const variantRows = this.#variantMapToRows(variantMap);
+      updateData.stockQuantity = sumStorageStocks(variantRows);
+      updateData.basePrice = minStoragePrice(
+        variantRows,
+        updateData.basePrice ?? fallbackPrice,
+      );
+    } else if (storageVariantMap && storageVariantMap.size > 0) {
+      const variantRows = this.#variantMapToRows(storageVariantMap);
+      updateData.stockQuantity = sumStorageStocks(variantRows);
+      updateData.basePrice = minStoragePrice(
+        variantRows,
+        updateData.basePrice ?? fallbackPrice,
+      );
+    } else if (data.stockQuantity !== undefined) {
+      updateData.stockQuantity = parseInt(data.stockQuantity, 10) || 0;
+    }
+
+    if (parsedRams && parsedRams.length > 0) {
+      updateData.ramOptions = {
+        deleteMany: {},
+        create: parsedRams.map((ramId) => ({ ramOptionId: ramId })),
+      };
+    }
+
+    const hasGalleryUpdates =
+      keptImages !== null ||
+      removedImageIds !== null ||
+      newGalleries.length > 0;
+    const legacyGalleryReplace = !hasGalleryUpdates && files && files.length > 0;
+
+    if (legacyGalleryReplace) {
+      const legacyGalleries = files.map((file, index) =>
+        this.#toNestedGalleryCreate({
+          imageUrl: file.path.replace(/\\/g, '/'),
+          displayOrder: index,
+          colorId: null,
+        }),
+      );
+
+      updateData.productGalleries = {
+        deleteMany: {},
+        create: legacyGalleries,
+      };
+    }
+
     const updatedProduct = await prisma.$transaction(async (tx) => {
-      const updateData = {};
-      const allowedFields = [
-        "title",
-        "description",
-        "introduction",
-        "basePrice",
-        "stockQuantity",
-        "listingStatus",
-      ];
-
-      for (const field of allowedFields) {
-        if (data[field] !== undefined) {
-          updateData[field] =
-            field === "basePrice" || field === "stockQuantity"
-              ? Number(data[field])
-              : data[field];
-        }
+      if (storageOptionsSync) {
+        await this.#syncProductStorageOptions(
+          tx,
+          id,
+          storageOptionsSync.storageIds,
+          storageOptionsSync.variantMap,
+        );
       }
 
-      // Validate Category-Condition consistency if either is being updated
-      if (data.categoryId || data.conditionId) {
-        const current = await tx.product.findUnique({
-          where: { id },
-          select: { categoryId: true, conditionId: true },
-        });
-        if (!current) throw new AppError('Product not found.', 404);
-
-        const finalCategoryId = data.categoryId || current.categoryId;
-
-        const category = await tx.category.findUnique({ where: { id: finalCategoryId }, select: { name: true } });
-        if (!category) throw new AppError('Invalid category ID.', 400);
-
-        const categoryNameLower = String(category.name || '').toLowerCase();
-
-        if (categoryNameLower === 'new') {
-          // "New" category products have no condition
-          data.conditionId = null;
-        } else {
-          const finalConditionId = data.conditionId || current.conditionId;
-          const condition = await tx.condition.findUnique({ where: { id: finalConditionId }, select: { name: true } });
-          if (!condition) throw new AppError('Invalid condition ID.', 400);
-          // Business rule: "Used" category cannot have "New" condition
-          if (categoryNameLower === 'used' && String(condition.name || '').toLowerCase() === 'new') {
-            throw new AppError('Products in "Used" category cannot have "New" condition.', 400);
-          }
-        }
-      }
-
-      if (data.categoryId)
-        updateData.category = { connect: { id: data.categoryId } };
-      if (data.seriesId) updateData.series = { connect: { id: data.seriesId } };
-      if (data.deviceModelId)
-        updateData.deviceModel = { connect: { id: data.deviceModelId } };
-      if (data.conditionId)
-        updateData.condition = { connect: { id: data.conditionId } };
-      else if (data.conditionId === null)
-        updateData.condition = { disconnect: true };
-
-      // Gallery updates: granular (keptImages/removedImageIds) or legacy full replace
-      const keptImages = data.keptImages
-        ? this.#parseJsonField(data.keptImages, 'keptImages')
-        : null;
-      const removedImageIds = data.removedImageIds
-        ? this.#parseJsonField(data.removedImageIds, 'removedImageIds')
-        : null;
-
-      let galleryColorIds = parsedColors;
-      if (!galleryColorIds) {
-        const existingColors = await tx.productColor.findMany({
-          where: { productId: id },
-          select: { colorId: true },
-        });
-        galleryColorIds = existingColors.map((c) => c.colorId);
-      }
-
-      const newGalleries =
-        files && files.length > 0
-          ? this.#buildGalleriesFromUploads(
-              files,
-              data.imageMeta,
-              galleryColorIds,
-            )
-          : [];
-
-      if (keptImages !== null || removedImageIds !== null || newGalleries.length > 0) {
-        if (keptImages !== null && !Array.isArray(keptImages)) {
-          throw new AppError('Invalid keptImages format. Must be a valid JSON array.', 400);
-        }
-        if (removedImageIds !== null && !Array.isArray(removedImageIds)) {
-          throw new AppError('Invalid removedImageIds format. Must be a valid JSON array.', 400);
-        }
-
+      if (hasGalleryUpdates) {
         if (removedImageIds?.length) {
           await tx.productGallery.deleteMany({
             where: { id: { in: removedImageIds }, productId: id },
@@ -748,21 +1102,21 @@ class ProductService {
         }
 
         if (keptImages?.length) {
-          const allowedColors = new Set(galleryColorIds || []);
-          for (const img of keptImages) {
-            if (!img?.id) continue;
-            const colorId = img.colorId || null;
-            if (colorId && allowedColors.size > 0 && !allowedColors.has(colorId)) {
-              throw new AppError('keptImages colorId must match a selected product color.', 400);
-            }
-            await tx.productGallery.updateMany({
-              where: { id: img.id, productId: id },
-              data: {
-                colorId,
-                displayOrder: Number.isFinite(img.displayOrder) ? img.displayOrder : 0,
-              },
-            });
-          }
+          await Promise.all(
+            keptImages
+              .filter((img) => img?.id)
+              .map((img) =>
+                tx.productGallery.updateMany({
+                  where: { id: img.id, productId: id },
+                  data: {
+                    colorId: img.colorId || null,
+                    displayOrder: Number.isFinite(img.displayOrder)
+                      ? img.displayOrder
+                      : 0,
+                  },
+                }),
+              ),
+          );
         }
 
         if (newGalleries.length > 0) {
@@ -770,93 +1124,31 @@ class ProductService {
             data: newGalleries.map((g) => ({ ...g, productId: id })),
           });
         }
-      } else if (files && files.length > 0) {
-        // Legacy: replace all images when only files are sent
-        const legacyGalleries = files.map((file, index) =>
-          this.#toNestedGalleryCreate({
-            imageUrl: file.path.replace(/\\/g, '/'),
-            displayOrder: index,
-            colorId: null,
-          }),
-        );
-
-        updateData.productGalleries = {
-          deleteMany: {},
-          create: legacyGalleries,
-        };
-      }
-
-      // Use Prisma's nested writes with set: [] to replace arrays efficiently
-      if (parsedFaqs && Array.isArray(parsedFaqs)) {
-        updateData.productFaqs = {
-          deleteMany: {},
-          create: parsedFaqs.map((faq) => ({
-            question: faq.question,
-            answer: faq.answer,
-          })),
-        };
-      }
-
-      if (parsedHighlights && Array.isArray(parsedHighlights)) {
-        updateData.highlights = {
-          deleteMany: {},
-          create: parsedHighlights.map((h) => ({
-            title: h.title,
-            description: h.description,
-            iconUrl: h.iconUrl || null,
-            displayOrder: h.displayOrder || 0,
-          })),
-        };
-      }
-
-      if (parsedSpecs && Array.isArray(parsedSpecs)) {
-        updateData.specifications = {
-          deleteMany: {},
-          create: parsedSpecs.map((s) => ({
-            name: s.name,
-            value: s.value,
-            displayOrder: s.displayOrder || 0,
-          })),
-        };
-      }
-
-      if (parsedIncludedItems && Array.isArray(parsedIncludedItems)) {
-        updateData.includedItems = {
-          deleteMany: {},
-          create: parsedIncludedItems
-            .filter((item) => item?.label?.trim())
-            .map((item, index) => ({
-              label: item.label.trim(),
-              displayOrder: Number.isFinite(item.displayOrder) ? item.displayOrder : index,
-            })),
-        };
       }
 
       if (parsedColors && parsedColors.length > 0) {
-        updateData.colors = {
-          deleteMany: {},
-          create: parsedColors.map((colorId) => ({ colorId })),
-        };
+        await tx.productGallery.deleteMany({
+          where: {
+            productId: id,
+            colorId: { notIn: parsedColors },
+          },
+        });
       }
 
-      if (parsedStorages && parsedStorages.length > 0) {
-        updateData.storageOptions = {
-          deleteMany: {},
-          create: parsedStorages.map((storageId) => ({
-            storageOptionId: storageId,
-          })),
-        };
+      if (storageVariantMap && storageVariantMap.size > 0 && !parsedStorages) {
+        await Promise.all(
+          [...storageVariantMap.entries()].map(([storageOptionId, variant]) =>
+            tx.productStorageOption.updateMany({
+              where: { productId: id, storageOptionId },
+              data: {
+                stockQuantity: variant.stockQuantity ?? 0,
+                ...(variant.price != null ? { price: variant.price } : {}),
+              },
+            }),
+          ),
+        );
       }
 
-      if (parsedRams && parsedRams.length > 0) {
-        updateData.ramOptions = {
-          deleteMany: {},
-          create: parsedRams.map((ramId) => ({ ramOptionId: ramId })),
-        };
-      }
-
-      // Execute the update with minimal select for fast response
-      // If product doesn't exist, Prisma will throw P2025 error
       return await tx.product.update({
         where: { id },
         data: updateData,
@@ -864,7 +1156,7 @@ class ProductService {
           id: true,
         },
       });
-    }).catch((error) => {
+    }, this.#transactionOptions).catch((error) => {
       // Handle Prisma P2025 error (Record not found)
       if (error.code === 'P2025') {
         throw new AppError('Product not found', 404);
@@ -881,11 +1173,16 @@ class ProductService {
   async deleteProductGalleryImage(productId, imageId) {
     const galleryImage = await prisma.productGallery.findFirst({
       where: { id: imageId, productId },
-      select: { id: true },
+      select: { id: true, isDeleted: true },
+      includeDeleted: true,
     });
 
     if (!galleryImage) {
       throw new AppError('Product image not found.', 404);
+    }
+
+    if (galleryImage.isDeleted) {
+      return true;
     }
 
     try {

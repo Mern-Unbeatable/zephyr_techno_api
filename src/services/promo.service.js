@@ -346,7 +346,8 @@ class PromoService {
           (seriesIds.length > 0 && seriesIds.includes(productSeriesId)) ||
           (modelIds.length > 0 && modelIds.includes(productModelId))
         ) {
-          applicableSubtotal += item.product.basePrice * item.quantity;
+          applicableSubtotal +=
+            (item.unitPrice ?? item.product.basePrice) * item.quantity;
         }
       }
 
