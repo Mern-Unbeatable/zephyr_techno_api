@@ -36,7 +36,7 @@ class CartService {
           include: { color: true },
         },
         storageOptions: {
-          where: { storageOptionId },
+          where: { storageOptionId, isDeleted: false },
           include: { storageOption: true },
         },
         ramOptions: {
@@ -134,6 +134,7 @@ class CartService {
                 take: 1,
               },
               storageOptions: {
+                where: { isDeleted: false },
                 select: { storageOptionId: true, stockQuantity: true, price: true },
               },
             },
@@ -171,6 +172,7 @@ class CartService {
               take: 1,
             },
             storageOptions: {
+              where: { isDeleted: false },
               select: { storageOptionId: true, stockQuantity: true, price: true },
             },
           },
@@ -209,6 +211,7 @@ class CartService {
                   take: 1,
                 },
                 storageOptions: {
+                  where: { isDeleted: false },
                   select: { storageOptionId: true, stockQuantity: true, price: true },
                 },
               },
@@ -324,6 +327,7 @@ class CartService {
               take: 1,
             },
             storageOptions: {
+              where: { isDeleted: false },
               select: { storageOptionId: true, stockQuantity: true, price: true },
             },
           },

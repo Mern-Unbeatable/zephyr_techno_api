@@ -1,6 +1,7 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/app-error.js';
 import { buildImageUrl } from '../utils/url.js';
+import { sortStorageOptionsBySize } from '../utils/stock.js';
 
 /**
  * Single service covering CRUD for all 7 admin-managed product attribute models:
@@ -535,7 +536,15 @@ class AttributesService {
     // Filter out "Brand New (Sealed)" condition from the response
     const filteredConditions = conditions.filter(c => c.name !== 'Brand New (seald)' && c.name !== 'Brand New (Sealed)');
 
-    return { categories, series: formattedSeries, models, conditions: filteredConditions, colors, storageOptions, ramOptions };
+    return {
+      categories,
+      series: formattedSeries,
+      models,
+      conditions: filteredConditions,
+      colors,
+      storageOptions: sortStorageOptionsBySize(storageOptions),
+      ramOptions,
+    };
   }
 
   /**

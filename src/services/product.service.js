@@ -1,12 +1,35 @@
 import prisma from "../utils/prisma.js";
 import AppError from "../utils/app-error.js";
 import { buildImageUrl } from "../utils/url.js";
-import { sumStorageStocks, minStoragePrice } from "../utils/stock.js";
+import { sumStorageStocks, minStoragePrice, sortStorageOptionsBySize } from "../utils/stock.js";
 
 class ProductService {
   #activeGalleryInclude = {
     where: { isDeleted: false },
     orderBy: { displayOrder: 'asc' },
+  };
+
+  // Nested relation includes bypass the soft-delete query extension, so filter explicitly.
+  // Also exclude bridges whose related attribute was soft-deleted (orphans).
+  #activeStorageInclude = {
+    where: {
+      isDeleted: false,
+      storageOption: { isDeleted: false },
+    },
+  };
+
+  #activeColorInclude = {
+    where: {
+      isDeleted: false,
+      color: { isDeleted: false },
+    },
+  };
+
+  #activeRamInclude = {
+    where: {
+      isDeleted: false,
+      ramOption: { isDeleted: false },
+    },
   };
 
   #transactionOptions = { timeout: 30000 };
@@ -277,15 +300,17 @@ class ProductService {
         name: pc.color.name,
         hexCode: pc.color.hexCode || null,
       })),
-      availableStorageOptions: (product.storageOptions || []).map((ps) => ({
-        id: ps.storageOption.id,
-        name: ps.storageOption.name,
-        stockQuantity: ps.stockQuantity ?? 0,
-        price:
-          ps.price != null
-            ? parseFloat(ps.price)
-            : parseFloat(product.basePrice),
-      })),
+      availableStorageOptions: sortStorageOptionsBySize(
+        (product.storageOptions || []).map((ps) => ({
+          id: ps.storageOption.id,
+          name: ps.storageOption.name,
+          stockQuantity: ps.stockQuantity ?? 0,
+          price:
+            ps.price != null
+              ? parseFloat(ps.price)
+              : parseFloat(product.basePrice),
+        })),
+      ),
       availableRamOptions: (product.ramOptions || []).map((pr) => ({
         id: pr.ramOption.id,
         name: pr.ramOption.name,
@@ -690,9 +715,12 @@ class ProductService {
           ...this.#activeGalleryInclude,
           take: 1,
         },
-        colors: { select: { colorId: true } },
-        storageOptions: { select: { storageOptionId: true } },
-        ramOptions: { select: { ramOptionId: true } },
+        colors: { ...this.#activeColorInclude, select: { colorId: true } },
+        storageOptions: {
+          ...this.#activeStorageInclude,
+          select: { storageOptionId: true, stockQuantity: true, price: true },
+        },
+        ramOptions: { ...this.#activeRamInclude, select: { ramOptionId: true } },
       },
     }),
     ]);
@@ -721,16 +749,19 @@ class ProductService {
         specifications: true,
         includedItems: { orderBy: { displayOrder: 'asc' } },
         colors: {
+          ...this.#activeColorInclude,
           include: {
             color: { select: { id: true, name: true, hexCode: true } },
           },
         },
         storageOptions: {
+          ...this.#activeStorageInclude,
           include: {
             storageOption: { select: { id: true, name: true } },
           },
         },
         ramOptions: {
+          ...this.#activeRamInclude,
           include: {
             ramOption: { select: { id: true, name: true } },
           },
@@ -1028,7 +1059,7 @@ class ProductService {
 
     let storageOptionsSync = null;
 
-    if (parsedStorages && parsedStorages.length > 0) {
+    if (parsedStorages) {
       const variantMap =
         storageVariantMap ||
         this.#parseStorageVariants(null, parsedStorages, {
@@ -1041,10 +1072,12 @@ class ProductService {
       };
       const variantRows = this.#variantMapToRows(variantMap);
       updateData.stockQuantity = sumStorageStocks(variantRows);
-      updateData.basePrice = minStoragePrice(
-        variantRows,
-        updateData.basePrice ?? fallbackPrice,
-      );
+      if (variantRows.length > 0) {
+        updateData.basePrice = minStoragePrice(
+          variantRows,
+          updateData.basePrice ?? fallbackPrice,
+        );
+      }
     } else if (storageVariantMap && storageVariantMap.size > 0) {
       const variantRows = this.#variantMapToRows(storageVariantMap);
       updateData.stockQuantity = sumStorageStocks(variantRows);
