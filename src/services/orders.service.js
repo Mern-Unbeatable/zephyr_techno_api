@@ -1,6 +1,6 @@
 import prisma from "../utils/prisma.js";
 import AppError from "../utils/app-error.js";
-import { buildImageUrl } from "../utils/url.js";
+import { buildImageUrl, resolveProductThumbnail } from "../utils/url.js";
 import promoService from "./promo.service.js";
 import { resolveStorageStock, resolveStoragePrice, syncProductStockTotal } from "../utils/stock.js";
 
@@ -9,6 +9,12 @@ import { resolveStorageStock, resolveStoragePrice, syncProductStockTotal } from 
  * Handles order creation and management
  */
 class OrderService {
+  #galleryInclude = {
+    where: { isDeleted: false },
+    orderBy: { displayOrder: 'asc' },
+    select: { imageUrl: true, colorId: true },
+  };
+
   async #getItemStorageStock(item) {
     const bridge = await prisma.productStorageOption.findFirst({
       where: {
@@ -334,11 +340,7 @@ class OrderService {
                 select: {
                   id: true,
                   title: true,
-                  productGalleries: {
-                    select: { imageUrl: true },
-                    orderBy: { displayOrder: 'asc' },
-                    take: 1,
-                  },
+                  productGalleries: this.#galleryInclude,
                 },
               },
               color: { select: { id: true, name: true } },
@@ -395,11 +397,7 @@ class OrderService {
               select: {
                 id: true,
                 title: true,
-                productGalleries: {
-                  select: { imageUrl: true },
-                  orderBy: { displayOrder: 'asc' },
-                  take: 1,
-                },
+                productGalleries: this.#galleryInclude,
               },
             },
             color: { select: { id: true, name: true } },
@@ -455,7 +453,7 @@ class OrderService {
               select: {
                 id: true,
                 title: true,
-                productGalleries: { select: { imageUrl: true }, orderBy: { displayOrder: 'asc' }, take: 1 },
+                productGalleries: this.#galleryInclude,
               },
             },
             color: { select: { id: true, name: true } },
@@ -507,11 +505,7 @@ class OrderService {
               select: {
                 id: true,
                 title: true,
-                productGalleries: {
-                  select: { imageUrl: true },
-                  orderBy: { displayOrder: 'asc' },
-                  take: 1,
-                },
+                productGalleries: this.#galleryInclude,
               },
             },
             color: { select: { id: true, name: true } },
@@ -547,11 +541,7 @@ class OrderService {
               select: {
                 id: true,
                 title: true,
-                productGalleries: {
-                  select: { imageUrl: true },
-                  orderBy: { displayOrder: 'asc' },
-                  take: 1,
-                },
+                productGalleries: this.#galleryInclude,
               },
             },
             color: { select: { id: true, name: true } },
@@ -667,11 +657,7 @@ class OrderService {
                 select: {
                   id: true,
                   title: true,
-                  productGalleries: {
-                    select: { imageUrl: true },
-                    orderBy: { displayOrder: 'asc' },
-                    take: 1,
-                  },
+                  productGalleries: this.#galleryInclude,
                 },
               },
               color: { select: { id: true, name: true } },
@@ -721,11 +707,7 @@ class OrderService {
                 select: {
                   id: true,
                   title: true,
-                  productGalleries: {
-                    select: { imageUrl: true },
-                    orderBy: { displayOrder: 'asc' },
-                    take: 1,
-                  },
+                  productGalleries: this.#galleryInclude,
                 },
               },
               color: { select: { id: true, name: true } },
@@ -896,8 +878,8 @@ class OrderService {
 
     const recentOrders = recent.map((o) => {
       const firstItem = o.orderItems && o.orderItems[0];
-      const thumbnail = firstItem && firstItem.product && firstItem.product.productGalleries && firstItem.product.productGalleries[0]
-        ? buildImageUrl(firstItem.product.productGalleries[0].imageUrl)
+      const thumbnail = firstItem
+        ? resolveProductThumbnail(firstItem.product, firstItem.colorId)
         : null;
 
       return {
@@ -979,14 +961,13 @@ class OrderService {
         country: order.address.country,
       } : null,
       items: order.orderItems.map((item) => {
-        const thumbnail = item.product.productGalleries?.[0]
-          ? buildImageUrl(item.product.productGalleries[0].imageUrl)
-          : null;
+        const thumbnail = resolveProductThumbnail(item.product, item.colorId);
 
         return {
           id: item.id,
           quantity: item.quantity,
           priceAtPurchase: parseFloat(item.priceAtPurchase),
+          thumbnail,
           product: {
             id: item.product.id,
             title: item.product.title,

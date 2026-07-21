@@ -1,6 +1,6 @@
 import prisma from "../utils/prisma.js";
 import AppError from "../utils/app-error.js";
-import { buildImageUrl } from "../utils/url.js";
+import { resolveProductThumbnail } from "../utils/url.js";
 import { resolveStorageStock, resolveStoragePrice } from "../utils/stock.js";
 
 /**
@@ -8,6 +8,12 @@ import { resolveStorageStock, resolveStoragePrice } from "../utils/stock.js";
  * Handles user cart operations with product option selections
  */
 class CartService {
+  #galleryInclude = {
+    where: { isDeleted: false },
+    orderBy: { displayOrder: 'asc' },
+    select: { imageUrl: true, colorId: true },
+  };
+
   /**
    * Add product to cart with selected options
    * Supports both authenticated users (userId) and guests (guestSessionId)
@@ -32,7 +38,7 @@ class CartService {
       where: { id: productId },
       include: {
         colors: {
-          where: { colorId },
+          where: { colorId, isDeleted: false },
           include: { color: true },
         },
         storageOptions: {
@@ -129,10 +135,7 @@ class CartService {
         include: {
           product: {
             include: {
-              productGalleries: {
-                orderBy: { displayOrder: 'asc' },
-                take: 1,
-              },
+              productGalleries: this.#galleryInclude,
               storageOptions: {
                 where: { isDeleted: false },
                 select: { storageOptionId: true, stockQuantity: true, price: true },
@@ -167,10 +170,7 @@ class CartService {
       include: {
         product: {
           include: {
-            productGalleries: {
-              orderBy: { displayOrder: 'asc' },
-              take: 1,
-            },
+            productGalleries: this.#galleryInclude,
             storageOptions: {
               where: { isDeleted: false },
               select: { storageOptionId: true, stockQuantity: true, price: true },
@@ -206,10 +206,7 @@ class CartService {
           include: {
             product: {
               include: {
-                productGalleries: {
-                  orderBy: { displayOrder: 'asc' },
-                  take: 1,
-                },
+                productGalleries: this.#galleryInclude,
                 storageOptions: {
                   where: { isDeleted: false },
                   select: { storageOptionId: true, stockQuantity: true, price: true },
@@ -322,10 +319,7 @@ class CartService {
       include: {
         product: {
           include: {
-            productGalleries: {
-              orderBy: { displayOrder: "asc" },
-              take: 1,
-            },
+            productGalleries: this.#galleryInclude,
             storageOptions: {
               where: { isDeleted: false },
               select: { storageOptionId: true, stockQuantity: true, price: true },
@@ -419,9 +413,7 @@ class CartService {
    * Format cart item for response
    */
   #formatCartItem(item) {
-    const thumbnail = item.product.productGalleries?.[0]
-      ? buildImageUrl(item.product.productGalleries[0].imageUrl)
-      : null;
+    const thumbnail = resolveProductThumbnail(item.product, item.colorId);
     const storageBridge = item.product.storageOptions?.find(
       (row) => row.storageOptionId === item.storageOptionId,
     );
@@ -437,6 +429,8 @@ class CartService {
     return {
       id: item.id,
       quantity: item.quantity,
+      thumbnail,
+      title: item.product.title,
       product: {
         id: item.product.id,
         title: item.product.title,
