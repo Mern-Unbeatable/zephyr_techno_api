@@ -278,39 +278,45 @@ class AttributesService {
         id: true,
         conditionId: true,
         deviceModelId: true,
+        storageOptionId: true,
         price: true,
         createdAt: true,
         updatedAt: true,
         condition: { select: { id: true, name: true } },
         deviceModel: { select: { id: true, name: true, seriesId: true } },
+        storageOption: { select: { id: true, name: true } },
       },
     });
   }
 
-  async createConditionModelPrice({ conditionId, deviceModelId, price }) {
+  async createConditionModelPrice({ conditionId, deviceModelId, storageOptionId, price }) {
     this.#requireString(conditionId, 'Condition ID');
     this.#requireString(deviceModelId, 'DeviceModel ID');
+    this.#requireString(storageOptionId, 'Storage option ID');
     const amt = this.#parsePrice(price);
     
-    // Let DB enforce FK constraints - avoids extra validation queries
     try {
       return await prisma.conditionModelPrice.create({
-        data: { conditionId, deviceModelId, price: amt },
+        data: { conditionId, deviceModelId, storageOptionId, price: amt },
         select: {
           id: true,
           conditionId: true,
           deviceModelId: true,
+          storageOptionId: true,
           price: true,
           createdAt: true,
           updatedAt: true,
+          condition: { select: { id: true, name: true } },
+          deviceModel: { select: { id: true, name: true, seriesId: true } },
+          storageOption: { select: { id: true, name: true } },
         },
       });
     } catch (err) {
       if (err?.code === 'P2002') {
-        throw new AppError('Price already set for this condition and model.', 409);
+        throw new AppError('Price already set for this condition, model, and storage.', 409);
       }
       if (err?.code === 'P2003') {
-        throw new AppError('Invalid condition or model ID.', 400);
+        throw new AppError('Invalid condition, model, or storage ID.', 400);
       }
       throw err;
     }
@@ -323,11 +329,13 @@ class AttributesService {
         id: true,
         conditionId: true,
         deviceModelId: true,
+        storageOptionId: true,
         price: true,
         createdAt: true,
         updatedAt: true,
         condition: { select: { id: true, name: true } },
         deviceModel: { select: { id: true, name: true, seriesId: true } },
+        storageOption: { select: { id: true, name: true } },
       },
     });
     if (!rec) throw new AppError('Condition model price not found.', 404);
@@ -344,9 +352,13 @@ class AttributesService {
           id: true,
           conditionId: true,
           deviceModelId: true,
+          storageOptionId: true,
           price: true,
           createdAt: true,
           updatedAt: true,
+          condition: { select: { id: true, name: true } },
+          deviceModel: { select: { id: true, name: true, seriesId: true } },
+          storageOption: { select: { id: true, name: true } },
         },
       });
     } catch (err) {
@@ -372,14 +384,87 @@ class AttributesService {
    * Resolve the effective price for a condition/model pair.
    * Returns the per-model price if present, otherwise falls back to Condition.basePrice.
    */
-  async resolvePriceFor(conditionId, deviceModelId) {
+  async resolvePriceFor(conditionId, deviceModelId, storageOptionId) {
     if (!conditionId) throw new AppError('Condition ID is required.', 400);
     if (!deviceModelId) throw new AppError('DeviceModel ID is required.', 400);
-    const pm = await prisma.conditionModelPrice.findFirst({ where: { conditionId, deviceModelId }, select: { price: true } });
+    if (!storageOptionId) throw new AppError('Storage option ID is required.', 400);
+
+    const pm = await prisma.conditionModelPrice.findFirst({
+      where: {
+        conditionId,
+        deviceModelId,
+        storageOptionId,
+        isDeleted: false,
+      },
+      select: { price: true },
+    });
     if (pm) return pm.price;
+
+    // Legacy rows without storage (before migration)
+    const legacy = await prisma.conditionModelPrice.findFirst({
+      where: {
+        conditionId,
+        deviceModelId,
+        storageOptionId: null,
+        isDeleted: false,
+      },
+      select: { price: true },
+    });
+    if (legacy) return legacy.price;
+
     const cond = await prisma.condition.findUnique({ where: { id: conditionId }, select: { basePrice: true } });
     if (!cond) throw new AppError('Condition not found.', 404);
     return cond.basePrice;
+  }
+
+  /**
+   * Sell flow: only return a price when admin set model + storage + condition.
+   * No fallback to condition basePrice (avoids showing £0).
+   */
+  async resolveExplicitPriceFor(conditionId, deviceModelId, storageOptionId) {
+    if (!conditionId) throw new AppError('Condition ID is required.', 400);
+    if (!deviceModelId) throw new AppError('DeviceModel ID is required.', 400);
+    if (!storageOptionId) throw new AppError('Storage option ID is required.', 400);
+
+    const pm = await prisma.conditionModelPrice.findFirst({
+      where: {
+        conditionId,
+        deviceModelId,
+        storageOptionId,
+        isDeleted: false,
+      },
+      select: { price: true },
+    });
+    if (!pm) return null;
+
+    const price = Number(pm.price);
+    if (!Number.isFinite(price) || price <= 0) return null;
+    return price;
+  }
+
+  /** Storages that have at least one admin price row for this model. */
+  async getStorageOptionsWithPricesForModel(deviceModelId) {
+    this.#requireString(deviceModelId, 'DeviceModel ID');
+
+    const rows = await prisma.conditionModelPrice.findMany({
+      where: {
+        deviceModelId,
+        storageOptionId: { not: null },
+        isDeleted: false,
+      },
+      select: {
+        storageOption: { select: { id: true, name: true } },
+      },
+    });
+
+    const byId = new Map();
+    for (const row of rows) {
+      if (row.storageOption?.id) {
+        byId.set(row.storageOption.id, row.storageOption);
+      }
+    }
+
+    return sortStorageOptionsBySize(Array.from(byId.values()));
   }
 
   // ─────────────────────────────────────────────────────────────

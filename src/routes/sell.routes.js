@@ -8,6 +8,7 @@ const router = Router();
 router.get("/series", ctrl.getAllSeries);
 router.get("/models", ctrl.getModelsBySeries);
 router.get("/conditions", ctrl.getAllConditions);
+router.get("/storage-options", ctrl.getAllStorageOptions);
 router.get("/price", ctrl.getPrice);
 router.post("/finalize", ctrl.finalizeSale);
 

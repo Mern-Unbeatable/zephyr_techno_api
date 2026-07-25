@@ -187,21 +187,24 @@ model Condition {
 
 // Per-model condition prices (overrides Condition.basePrice)
 model ConditionModelPrice {
-  id            String    @id @default(uuid())
-  conditionId   String
-  deviceModelId String
-  price         Decimal   @db.Decimal(12, 2)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  isDeleted     Boolean   @default(false)
-  deletedAt     DateTime?
+  id              String    @id @default(uuid())
+  conditionId     String
+  deviceModelId   String
+  storageOptionId String?
+  price           Decimal   @db.Decimal(12, 2)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  isDeleted         Boolean   @default(false)
+  deletedAt       DateTime?
 
-  condition   Condition   @relation(fields: [conditionId], references: [id], onDelete: Cascade)
-  deviceModel DeviceModel @relation(fields: [deviceModelId], references: [id], onDelete: Cascade)
+  condition     Condition      @relation(fields: [conditionId], references: [id], onDelete: Cascade)
+  deviceModel   DeviceModel    @relation(fields: [deviceModelId], references: [id], onDelete: Cascade)
+  storageOption StorageOption? @relation(fields: [storageOptionId], references: [id], onDelete: Cascade)
 
-  @@unique([conditionId, deviceModelId])
+  @@unique([conditionId, deviceModelId, storageOptionId])
   @@index([conditionId])
   @@index([deviceModelId])
+  @@index([storageOptionId])
   @@index([isDeleted])
 }
 
@@ -218,13 +221,15 @@ model Color {
 }
 
 model StorageOption {
-  id         String                 @id @default(uuid())
-  name       String                 @unique
-  products   ProductStorageOption[]
-  cartItems  CartItem[]
-  orderItems OrderItem[]
-  isDeleted  Boolean                @default(false)
-  deletedAt  DateTime?
+  id                   String                 @id @default(uuid())
+  name                 String                 @unique
+  products             ProductStorageOption[]
+  cartItems            CartItem[]
+  orderItems           OrderItem[]
+  conditionModelPrices ConditionModelPrice[]
+  sellRequests         SellRequest[]
+  isDeleted            Boolean                @default(false)
+  deletedAt            DateTime?
 }
 
 model RamOption {
@@ -601,6 +606,7 @@ model SellRequest {
   deviceName       String
   deviceModelId    String?
   conditionId      String?
+  storageOptionId  String?
   baseOfferPrice   Decimal    @db.Decimal(12, 2)
   userOfferedPrice Decimal?   @db.Decimal(12, 2)
   status           SellStatus @default(SUBMITTED)
@@ -611,14 +617,16 @@ model SellRequest {
 
   user        User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
   condition   Condition?    @relation(fields: [conditionId], references: [id])
-  deviceModel DeviceModel?  @relation(fields: [deviceModelId], references: [id])
-  images      DeviceImage[]
-  isDeleted   Boolean       @default(false)
-  deletedAt   DateTime?
+  deviceModel   DeviceModel?   @relation(fields: [deviceModelId], references: [id])
+  storageOption StorageOption? @relation(fields: [storageOptionId], references: [id])
+  images        DeviceImage[]
+  isDeleted     Boolean        @default(false)
+  deletedAt     DateTime?
 
   @@index([userId])
   @@index([conditionId])
   @@index([deviceModelId])
+  @@index([storageOptionId])
 }
 
 model DeviceImage {

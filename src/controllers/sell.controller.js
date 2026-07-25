@@ -86,18 +86,33 @@ class SellController {
     res.status(200).json({ success: true, data });
   });
 
+  getAllStorageOptions = asyncHandler(async (req, res) => {
+    const { deviceModelId } = req.query;
+    const data = deviceModelId
+      ? await attributesService.getStorageOptionsWithPricesForModel(deviceModelId)
+      : await attributesService.getAllStorageOptions();
+    res.status(200).json({ success: true, data });
+  });
+
   getPrice = asyncHandler(async (req, res) => {
-    const { conditionId, deviceModelId } = req.query;
-    if (!conditionId || !deviceModelId)
+    const { conditionId, deviceModelId, storageOptionId } = req.query;
+    if (!conditionId || !deviceModelId || !storageOptionId)
       return res.status(400).json({
         success: false,
-        message: "conditionId and deviceModelId are required.",
+        message: "conditionId, deviceModelId, and storageOptionId are required.",
       });
-    const price = await attributesService.resolvePriceFor(
+    const price = await attributesService.resolveExplicitPriceFor(
       conditionId,
       deviceModelId,
+      storageOptionId,
     );
-    res.status(200).json({ success: true, data: { price } });
+    res.status(200).json({
+      success: true,
+      data: {
+        price,
+        hasConfiguredPrice: price != null,
+      },
+    });
   });
 
   finalizeSale = asyncHandler(async (req, res) => {
@@ -116,6 +131,7 @@ class SellController {
     const {
       deviceModelId,
       conditionId,
+      storageOptionId,
       baseOfferPrice,
       images,
       serialNumber,
@@ -130,12 +146,24 @@ class SellController {
       return res
         .status(400)
         .json({ success: false, message: "conditionId is required." });
+    if (!storageOptionId)
+      return res
+        .status(400)
+        .json({ success: false, message: "storageOptionId is required." });
 
-    // Compute server-side price
-    const serverPrice = await attributesService.resolvePriceFor(
+    // Compute server-side price (only explicitly configured rows)
+    const serverPrice = await attributesService.resolveExplicitPriceFor(
       conditionId,
       deviceModelId,
+      storageOptionId,
     );
+    if (serverPrice == null) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "No price is configured for this device, storage, and condition. Please contact us for a quote.",
+      });
+    }
 
     // Compare with client-submitted price
     const userOfferedPrice =
@@ -153,6 +181,7 @@ class SellController {
       deviceName: payload.deviceName || "",
       deviceModelId,
       conditionId,
+      storageOptionId,
       baseOfferPrice: basePriceToStore,
       userOfferedPrice,
       serialNumber,
@@ -195,6 +224,7 @@ class SellController {
         email: r.email,
         phone: r.phone,
         deviceModelName: r.deviceModel?.name || null,
+        storageOptionName: r.storageOption?.name || null,
         conditionName: r.condition?.name || null,
         baseOfferPrice: r.baseOfferPrice,
         userOfferedPrice: r.userOfferedPrice,
@@ -233,6 +263,7 @@ class SellController {
       email: rec.email,
       phone: rec.phone,
       deviceModelName: rec.deviceModel?.name || null,
+      storageOptionName: rec.storageOption?.name || null,
       conditionName: rec.condition?.name || null,
       baseOfferPrice: rec.baseOfferPrice,
       userOfferedPrice: rec.userOfferedPrice,

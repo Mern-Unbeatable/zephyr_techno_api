@@ -11,6 +11,7 @@ class SellService {
     deviceName,
     deviceModelId,
     conditionId,
+    storageOptionId,
     baseOfferPrice,
     userOfferedPrice = null,
     serialNumber,
@@ -54,6 +55,7 @@ class SellService {
           deviceName,
           deviceModelId: deviceModelId || null,
           conditionId: conditionId || null,
+          storageOptionId: storageOptionId || null,
           baseOfferPrice,
           userOfferedPrice,
           serialNumber: serialNumber || null,
@@ -120,6 +122,7 @@ class SellService {
           images: true,
           condition: { select: { name: true } },
           deviceModel: { select: { name: true } },
+          storageOption: { select: { id: true, name: true } },
         },
       }),
       prisma.sellRequest.count({ where }),
@@ -138,6 +141,7 @@ class SellService {
         images: true,
         condition: { select: { name: true } },
         deviceModel: { select: { name: true } },
+        storageOption: { select: { id: true, name: true } },
       },
     });
     return rec;
