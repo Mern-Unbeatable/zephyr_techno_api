@@ -22,7 +22,13 @@ class PaymentsService {
       userEmail = user?.email || guestEmail;
     }
 
-    // Create order first (PENDING)
+    // Clear previous unpaid drafts so retries don't leave ghost orders in admin
+    await orderService.abandonOpenUnpaidCheckouts({
+      userId,
+      guestEmail: userId ? null : guestEmail,
+    });
+
+    // Create order draft first (PENDING / unpaid) — confirmed only after Stripe payment
     const order = await orderService.createOrder(userId, guestSessionId, guestEmail, { 
       shippingAddress, 
       paymentMethod: 'STRIPE', 
@@ -43,8 +49,17 @@ class PaymentsService {
       quantity: it.quantity,
     }));
 
-    const successUrl = process.env.STRIPE_SUCCESS_URL || `${env.nodeEnv === 'development' ? 'http://localhost:3000' : ''}/checkout/success?orderId=${order.id}`;
-    const cancelUrl = process.env.STRIPE_CANCEL_URL || `${env.nodeEnv === 'development' ? 'http://localhost:3000' : ''}/checkout/cancel`;
+    const frontendBase =
+      process.env.FRONTEND_URL ||
+      (env.nodeEnv === 'development' ? 'http://localhost:5173' : 'https://zephyrtechnology.co.uk');
+
+    const successBase =
+      process.env.STRIPE_SUCCESS_URL || `${frontendBase}/checkout/success`;
+    const cancelBase =
+      process.env.STRIPE_CANCEL_URL || `${frontendBase}/checkout/cancel`;
+
+    const successUrl = `${successBase}${successBase.includes('?') ? '&' : '?'}orderId=${order.id}`;
+    const cancelUrl = `${cancelBase}${cancelBase.includes('?') ? '&' : '?'}orderId=${order.id}`;
 
     const session = await this.stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -54,6 +69,12 @@ class PaymentsService {
       success_url: successUrl,
       cancel_url: cancelUrl,
       metadata: { orderId: order.id },
+    });
+
+    // Persist Stripe session id for cancel / reconcile
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { paymentIntentId: session.id },
     });
 
     return { order, sessionUrl: session.url, sessionId: session.id };
@@ -69,18 +90,29 @@ class PaymentsService {
     const session = await this.stripe.checkout.sessions.retrieve(sessionId);
     if (!session) throw new Error('Checkout session not found');
 
+    const orderId = session.metadata?.orderId;
+
     // Payment status is in session.payment_status (e.g., 'paid')
     if (session.payment_status !== 'paid') {
+      if (orderId) {
+        await orderService.abandonUnpaidOrder(orderId, 'Payment not completed');
+      }
       throw new Error('Payment not completed');
     }
 
-    const orderId = session.metadata?.orderId;
     if (!orderId) throw new Error('Order id missing from session metadata');
 
     // Update order status to PROCESSING and payment status to PAID
     const updatedOrder = await orderService.confirmPayment(orderId, 'PROCESSING', 'PAID');
 
     return updatedOrder;
+  }
+
+  /**
+   * Abandon unpaid draft when user cancels Stripe Checkout.
+   */
+  async cancelUnpaidCheckout(orderId) {
+    return orderService.abandonUnpaidOrder(orderId, 'Customer cancelled Stripe checkout');
   }
 }
 

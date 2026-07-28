@@ -56,6 +56,17 @@ class PaymentsController {
 
     res.status(200).json({ success: true, data: order });
   });
+
+  // POST /api/public/product/checkout/cancel
+  // Soft-deletes unpaid draft so it never appears as a real admin order
+  cancelUnpaidCheckout = asyncHandler(async (req, res) => {
+    const { orderId } = req.body;
+    if (!orderId) return res.status(400).json({ success: false, message: 'orderId is required' });
+
+    await paymentsService.cancelUnpaidCheckout(orderId);
+
+    res.status(200).json({ success: true, message: 'Unpaid checkout discarded' });
+  });
 }
 
 export default new PaymentsController();

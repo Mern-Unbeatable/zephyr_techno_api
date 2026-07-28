@@ -14,6 +14,7 @@ publicRouter.get('/', productController.getAllProducts);
 publicRouter.post('/promo/validate', optionalAuthenticate, promoController.validatePromoCode);
 publicRouter.post('/checkout', optionalAuthenticate, paymentsController.createCheckoutSession);
 publicRouter.post('/checkout/confirm', paymentsController.confirmCheckoutSession);
+publicRouter.post('/checkout/cancel', paymentsController.cancelUnpaidCheckout);
 
 // Admin product routes
 const adminRouter = Router();

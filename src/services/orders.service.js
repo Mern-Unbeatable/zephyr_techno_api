@@ -319,7 +319,8 @@ class OrderService {
   async getUserOrders(userId, query = {}) {
     const { status, page = 1, limit = 50 } = query;
 
-    const where = { userId, isDeleted: false };
+    // Hide unpaid Stripe drafts — only real (paid / settled) orders
+    const where = { userId, isDeleted: false, paymentStatus: { not: 'PENDING' } };
     if (status) where.orderStatus = status;
 
     const take = Math.min(Number(limit) || 50, 100);
@@ -418,6 +419,64 @@ class OrderService {
     }
 
     return this.#formatOrder(order, isAdmin);
+  }
+
+  /**
+   * Soft-delete an unpaid checkout draft (payment never completed).
+   * Safe to call multiple times; no-ops if already paid or deleted.
+   */
+  async abandonUnpaidOrder(orderId, reason = 'Payment cancelled or abandoned') {
+    if (!orderId) return null;
+
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order || order.isDeleted) return null;
+
+    // Never touch paid / fulfilled orders
+    if (order.paymentStatus === 'PAID') return null;
+    if (['SHIPPED', 'DELIVERED'].includes(order.orderStatus)) return null;
+
+    return prisma.order.update({
+      where: { id: orderId },
+      data: {
+        orderStatus: 'CANCELLED',
+        paymentStatus: 'FAILED',
+        cancellationReason: reason,
+        cancelledAt: new Date(),
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Soft-delete open unpaid drafts for a buyer before starting a new checkout.
+   */
+  async abandonOpenUnpaidCheckouts({ userId = null, guestEmail = null } = {}) {
+    const buyerFilter = userId
+      ? { userId }
+      : guestEmail
+        ? { guestEmail, userId: null }
+        : null;
+    if (!buyerFilter) return 0;
+
+    const result = await prisma.order.updateMany({
+      where: {
+        ...buyerFilter,
+        isDeleted: false,
+        paymentStatus: 'PENDING',
+        orderStatus: 'PENDING',
+      },
+      data: {
+        orderStatus: 'CANCELLED',
+        paymentStatus: 'FAILED',
+        cancellationReason: 'Superseded by a new checkout attempt',
+        cancelledAt: new Date(),
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
+    });
+
+    return result.count;
   }
 
   /**
@@ -678,7 +737,8 @@ class OrderService {
   async getAllOrders(query) {
     const { status, userId, page = 1, limit = 20 } = query;
 
-    const where = { isDeleted: false };
+    // Hide unpaid Stripe drafts (created before payment) from admin
+    const where = { isDeleted: false, paymentStatus: { not: 'PENDING' } };
     if (status) where.orderStatus = status;
     if (userId) where.userId = userId;
 
@@ -732,7 +792,7 @@ class OrderService {
   async getOrderStats() {
     const stats = await prisma.order.groupBy({
       by: ['orderStatus'],
-      where: { isDeleted: false },
+      where: { isDeleted: false, paymentStatus: { not: 'PENDING' } },
       _count: {
         id: true,
       },
@@ -826,15 +886,27 @@ class OrderService {
         _sum: { totalPrice: true },
         where: { isDeleted: false, paymentStatus: 'PAID' },
       }),
-      // Active orders = pending + processing + shipped
+      // Active orders = paid pending + processing + shipped (exclude unpaid drafts)
       prisma.order.count({
-        where: { isDeleted: false, orderStatus: { in: ['PENDING', 'PROCESSING', 'SHIPPED'] } },
+        where: {
+          isDeleted: false,
+          paymentStatus: { not: 'PENDING' },
+          orderStatus: { in: ['PENDING', 'PROCESSING', 'SHIPPED'] },
+        },
       }),
       // Processing orders
-      prisma.order.count({ where: { isDeleted: false, orderStatus: 'PROCESSING' } }),
-      prisma.order.count({ where: { isDeleted: false, orderStatus: 'PENDING' } }),
-      prisma.order.count({ where: { isDeleted: false, orderStatus: 'DELIVERED' } }),
-      prisma.order.count({ where: { isDeleted: false, orderStatus: 'CANCELLED' } }),
+      prisma.order.count({
+        where: { isDeleted: false, paymentStatus: { not: 'PENDING' }, orderStatus: 'PROCESSING' },
+      }),
+      prisma.order.count({
+        where: { isDeleted: false, paymentStatus: { not: 'PENDING' }, orderStatus: 'PENDING' },
+      }),
+      prisma.order.count({
+        where: { isDeleted: false, paymentStatus: { not: 'PENDING' }, orderStatus: 'DELIVERED' },
+      }),
+      prisma.order.count({
+        where: { isDeleted: false, paymentStatus: { not: 'PENDING' }, orderStatus: 'CANCELLED' },
+      }),
       // All active products regardless of category
       prisma.product.count({ where: { isDeleted: false, listingStatus: 'ACTIVE' } }),
       // "New" phones = products whose category name contains 'new' (case-insensitive)
@@ -845,9 +917,9 @@ class OrderService {
           category: { name: { contains: 'new', mode: 'insensitive' } },
         },
       }),
-      // Recent orders (latest 5)
+      // Recent orders (latest 5) — paid/settled only
       prisma.order.findMany({
-        where: { isDeleted: false },
+        where: { isDeleted: false, paymentStatus: { not: 'PENDING' } },
         orderBy: { createdAt: 'desc' },
         take: 5,
         include: {
