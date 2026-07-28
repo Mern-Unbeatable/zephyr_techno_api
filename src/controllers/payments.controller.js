@@ -20,16 +20,7 @@ class PaymentsController {
       });
     }
 
-    // Guest checkout requires email
-    if (!userId && !guestEmail) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Guest checkout requires guestEmail' 
-      });
-    }
-
     const { shippingAddress, cartItemIds, shippingMethod, shippingCost, promoCode, productId, colorId, storageOptionId, ramOptionId, quantity } = req.body;
-    if (!shippingAddress) return res.status(400).json({ success: false, message: 'shippingAddress required' });
 
     // Check if direct product checkout
     let directProduct = null;
@@ -43,7 +34,17 @@ class PaymentsController {
       };
     }
 
-    const { order, sessionUrl, sessionId } = await paymentsService.createCheckoutSession(userId, guestSessionId, guestEmail, shippingAddress, cartItemIds, shippingMethod, shippingCost, promoCode, directProduct);
+    const { order, sessionUrl, sessionId } = await paymentsService.createCheckoutSession(
+      userId,
+      guestSessionId,
+      guestEmail,
+      shippingAddress || null,
+      cartItemIds,
+      shippingMethod,
+      shippingCost,
+      promoCode,
+      directProduct,
+    );
     res.status(201).json({ success: true, data: { orderId: order.id, checkoutUrl: sessionUrl, sessionId } });
   });
 

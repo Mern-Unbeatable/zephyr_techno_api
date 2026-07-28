@@ -42,7 +42,7 @@ class PaymentsService {
     // Build line items for stripe
     const line_items = order.items.map((it) => ({
       price_data: {
-        currency: 'usd',
+        currency: 'gbp',
         product_data: { name: it.title },
         unit_amount: Math.round(it.priceAtPurchase * 100),
       },
@@ -65,6 +65,9 @@ class PaymentsService {
       payment_method_types: ['card'],
       mode: 'payment',
       customer_email: userEmail || undefined,
+      billing_address_collection: 'required',
+      shipping_address_collection: { allowed_countries: ['GB'] },
+      phone_number_collection: { enabled: true },
       line_items,
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -102,8 +105,27 @@ class PaymentsService {
 
     if (!orderId) throw new Error('Order id missing from session metadata');
 
+    const shippingSource = session.shipping_details || session.customer_details || null;
+    const rawAddress = shippingSource?.address || null;
+    const normalizedStripeAddress = rawAddress
+      ? {
+          fullName: shippingSource?.name || 'Stripe Customer',
+          phone: shippingSource?.phone || null,
+          street: [rawAddress.line1, rawAddress.line2].filter(Boolean).join(', '),
+          city: rawAddress.city || 'Unknown',
+          state: rawAddress.state || null,
+          zipCode: rawAddress.postal_code || 'Unknown',
+          country: rawAddress.country === 'GB' ? 'United Kingdom' : (rawAddress.country || 'United Kingdom'),
+        }
+      : null;
+
     // Update order status to PROCESSING and payment status to PAID
-    const updatedOrder = await orderService.confirmPayment(orderId, 'PROCESSING', 'PAID');
+    const updatedOrder = await orderService.confirmPayment(
+      orderId,
+      'PROCESSING',
+      'PAID',
+      normalizedStripeAddress,
+    );
 
     return updatedOrder;
   }

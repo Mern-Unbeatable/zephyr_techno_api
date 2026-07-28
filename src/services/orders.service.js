@@ -54,15 +54,24 @@ class OrderService {
   async createOrder(userId, guestSessionId, guestEmail, data) {
     const { shippingAddress, paymentMethod, cartItemIds, shippingMethod, shippingCost = 0, promoCode, directProduct } = data;
 
-    if (!shippingAddress) {
-      throw new AppError("Shipping address is required", 400);
-    }
-
-    // Validate required address fields
-    const { fullName, street, city, zipCode, country } = shippingAddress;
-    if (!fullName || !street || !city || !zipCode || !country) {
-      throw new AppError("Complete shipping address required (fullName, street, city, zipCode, country)", 400);
-    }
+    // Shipping details can be collected on Stripe. If checkout page doesn't send them,
+    // create a placeholder address and replace it after payment confirmation.
+    const normalizedAddress = shippingAddress
+      && shippingAddress.fullName
+      && shippingAddress.street
+      && shippingAddress.city
+      && shippingAddress.zipCode
+      && shippingAddress.country
+      ? shippingAddress
+      : {
+          fullName: guestEmail || 'Stripe Customer',
+          phone: null,
+          street: 'To be provided on Stripe',
+          city: 'Pending',
+          state: null,
+          zipCode: 'Pending',
+          country: 'United Kingdom',
+        };
 
     let cartItems;
 
@@ -216,13 +225,13 @@ class OrderService {
       const address = await tx.userAddress.create({
         data: {
           userId: userId || null,
-          fullName: shippingAddress.fullName,
-          phone: shippingAddress.phone || null,
-          street: shippingAddress.street,
-          city: shippingAddress.city,
-          state: shippingAddress.state || null,
-          zipCode: shippingAddress.zipCode,
-          country: shippingAddress.country,
+          fullName: normalizedAddress.fullName,
+          phone: normalizedAddress.phone || null,
+          street: normalizedAddress.street,
+          city: normalizedAddress.city,
+          state: normalizedAddress.state || null,
+          zipCode: normalizedAddress.zipCode,
+          country: normalizedAddress.country,
         },
       });
 
@@ -384,7 +393,7 @@ class OrderService {
         createdAt: true,
         updatedAt: true,
         address: {
-          select: { fullName: true, phone: true, street: true, city: true, state: true, zipCode: true, country: true },
+          select: { id: true, fullName: true, phone: true, street: true, city: true, state: true, zipCode: true, country: true },
         },
         user: {
           select: {
@@ -581,7 +590,12 @@ class OrderService {
   /**
    * Update order and payment status (for payment confirmation)
    */
-  async confirmPayment(orderId, orderStatus = 'PROCESSING', paymentStatus = 'PAID') {
+  async confirmPayment(
+    orderId,
+    orderStatus = 'PROCESSING',
+    paymentStatus = 'PAID',
+    stripeShippingAddress = null,
+  ) {
     const existing = await prisma.order.findUnique({
       where: { id: orderId },
       include: {
@@ -691,6 +705,21 @@ class OrderService {
         await tx.promoCode.updateMany({
           where: { code: existing.promoCodeUsed },
           data: { currentUsageCount: { increment: 1 } },
+        });
+      }
+
+      if (stripeShippingAddress?.fullName) {
+        await tx.userAddress.update({
+          where: { id: existing.address.id },
+          data: {
+            fullName: stripeShippingAddress.fullName,
+            phone: stripeShippingAddress.phone || existing.address.phone || null,
+            street: stripeShippingAddress.street || existing.address.street,
+            city: stripeShippingAddress.city || existing.address.city,
+            state: stripeShippingAddress.state || existing.address.state || null,
+            zipCode: stripeShippingAddress.zipCode || existing.address.zipCode,
+            country: stripeShippingAddress.country || existing.address.country,
+          },
         });
       }
 
