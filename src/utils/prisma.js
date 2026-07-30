@@ -67,24 +67,36 @@ const prisma = basePrisma.$extends({
         return query(args);
       },
       async findUnique({ model, operation, args, query }) {
+        // Hard-delete models have no isDeleted — keep real findUnique so compound
+        // unique keys (e.g. productId_colorId_storageOptionId) still work.
+        if (HARD_DELETE_MODELS.has(model)) {
+          if (args?.includeDeleted) {
+            const { includeDeleted, ...rest } = args;
+            return query(rest);
+          }
+          return query(args);
+        }
+
         // findUnique requires strictly unique fields in `where`. 
         // We override this to findFirst so we can append `isDeleted: false`.
         const { where, includeDeleted, ...rest } = args;
         const newArgs = { where, ...rest };
-        if (HARD_DELETE_MODELS.has(model)) {
-          return basePrisma[model].findFirst(newArgs);
-        }
         if (!includeDeleted) {
           newArgs.where = { ...where, isDeleted: false };
         }
         return basePrisma[model].findFirst(newArgs);
       },
       async findUniqueOrThrow({ model, operation, args, query }) {
+        if (HARD_DELETE_MODELS.has(model)) {
+          if (args?.includeDeleted) {
+            const { includeDeleted, ...rest } = args;
+            return query(rest);
+          }
+          return query(args);
+        }
+
         const { where, includeDeleted, ...rest } = args;
         const newArgs = { where, ...rest };
-        if (HARD_DELETE_MODELS.has(model)) {
-          return basePrisma[model].findFirstOrThrow(newArgs);
-        }
         if (!includeDeleted) {
           newArgs.where = { ...where, isDeleted: false };
         }
