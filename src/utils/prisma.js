@@ -27,10 +27,17 @@ const basePrisma = new PrismaClient({
     : ['error'],
 });
 
+/** Models without soft-delete columns — skip the global isDeleted filter / soft delete. */
+const HARD_DELETE_MODELS = new Set(['ProductVariantStock']);
+
 const prisma = basePrisma.$extends({
   query: {
     $allModels: {
       async findMany({ model, operation, args, query }) {
+        if (HARD_DELETE_MODELS.has(model)) {
+          if (args?.includeDeleted) delete args.includeDeleted;
+          return query(args);
+        }
         if (!args?.includeDeleted) {
           args.where = { isDeleted: false, ...args.where };
         }
@@ -38,6 +45,10 @@ const prisma = basePrisma.$extends({
         return query(args);
       },
       async findFirst({ model, operation, args, query }) {
+        if (HARD_DELETE_MODELS.has(model)) {
+          if (args?.includeDeleted) delete args.includeDeleted;
+          return query(args);
+        }
         if (!args?.includeDeleted) {
           args.where = { isDeleted: false, ...args.where };
         }
@@ -45,6 +56,10 @@ const prisma = basePrisma.$extends({
         return query(args);
       },
       async findFirstOrThrow({ model, operation, args, query }) {
+        if (HARD_DELETE_MODELS.has(model)) {
+          if (args?.includeDeleted) delete args.includeDeleted;
+          return query(args);
+        }
         if (!args?.includeDeleted) {
           args.where = { isDeleted: false, ...args.where };
         }
@@ -56,6 +71,9 @@ const prisma = basePrisma.$extends({
         // We override this to findFirst so we can append `isDeleted: false`.
         const { where, includeDeleted, ...rest } = args;
         const newArgs = { where, ...rest };
+        if (HARD_DELETE_MODELS.has(model)) {
+          return basePrisma[model].findFirst(newArgs);
+        }
         if (!includeDeleted) {
           newArgs.where = { ...where, isDeleted: false };
         }
@@ -64,6 +82,9 @@ const prisma = basePrisma.$extends({
       async findUniqueOrThrow({ model, operation, args, query }) {
         const { where, includeDeleted, ...rest } = args;
         const newArgs = { where, ...rest };
+        if (HARD_DELETE_MODELS.has(model)) {
+          return basePrisma[model].findFirstOrThrow(newArgs);
+        }
         if (!includeDeleted) {
           newArgs.where = { ...where, isDeleted: false };
         }
@@ -71,6 +92,10 @@ const prisma = basePrisma.$extends({
       },
       async count({ model, operation, args, query }) {
         args = args || {};
+        if (HARD_DELETE_MODELS.has(model)) {
+          if (args.includeDeleted) delete args.includeDeleted;
+          return query(args);
+        }
         if (!args.includeDeleted) {
           args.where = { isDeleted: false, ...args.where };
         }
@@ -79,6 +104,10 @@ const prisma = basePrisma.$extends({
       },
       async aggregate({ model, operation, args, query }) {
         args = args || {};
+        if (HARD_DELETE_MODELS.has(model)) {
+          if (args.includeDeleted) delete args.includeDeleted;
+          return query(args);
+        }
         if (!args.includeDeleted) {
           args.where = { isDeleted: false, ...args.where };
         }
@@ -87,6 +116,10 @@ const prisma = basePrisma.$extends({
       },
       async groupBy({ model, operation, args, query }) {
         args = args || {};
+        if (HARD_DELETE_MODELS.has(model)) {
+          if (args.includeDeleted) delete args.includeDeleted;
+          return query(args);
+        }
         if (!args.includeDeleted) {
           args.where = { isDeleted: false, ...args.where };
         }
@@ -94,6 +127,10 @@ const prisma = basePrisma.$extends({
         return query(args);
       },
       async delete({ model, operation, args, query }) {
+        if (HARD_DELETE_MODELS.has(model)) {
+          return query(args);
+        }
+
         const timestamp = Date.now();
         const data = { isDeleted: true, deletedAt: new Date() };
 
@@ -111,6 +148,10 @@ const prisma = basePrisma.$extends({
         });
       },
       async deleteMany({ model, operation, args, query }) {
+        if (HARD_DELETE_MODELS.has(model)) {
+          return query(args);
+        }
+
         args = args || {};
         const timestamp = Date.now();
         const data = { isDeleted: true, deletedAt: new Date() };
