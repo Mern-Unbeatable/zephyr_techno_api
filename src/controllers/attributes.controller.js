@@ -3,7 +3,7 @@ import asyncHandler from '../utils/async-handler.js';
 
 /**
  * Admin Attributes Controller
- * Handles CRUD for: Category, Series, DeviceModel, Condition, Color, StorageOption, RamOption
+ * Handles CRUD for: Category, Series, DeviceModel, Condition, Color, StorageOption
  * Arrow-field class pattern — `this` is always correctly bound (same as auth.controller.js).
  */
 class AttributesController {
@@ -215,33 +215,6 @@ class AttributesController {
   deleteStorageOption = asyncHandler(async (req, res) => {
     await this.service.deleteStorageOption(req.params.id);
     res.status(200).json({ success: true, message: 'Storage option deleted.' });
-  });
-
-  // ─── RAM OPTION ──────────────────────────────────────────────
-
-  createRamOption = asyncHandler(async (req, res) => {
-    const data = await this.service.createRamOption(req.body);
-    res.status(201).json({ success: true, message: 'RAM option created.', data });
-  });
-
-  getAllRamOptions = asyncHandler(async (req, res) => {
-    const data = await this.service.getAllRamOptions();
-    res.status(200).json({ success: true, data });
-  });
-
-  getRamOptionById = asyncHandler(async (req, res) => {
-    const data = await this.service.getRamOptionById(req.params.id);
-    res.status(200).json({ success: true, data });
-  });
-
-  updateRamOption = asyncHandler(async (req, res) => {
-    const data = await this.service.updateRamOption(req.params.id, req.body);
-    res.status(200).json({ success: true, message: 'RAM option updated.', data });
-  });
-
-  deleteRamOption = asyncHandler(async (req, res) => {
-    await this.service.deleteRamOption(req.params.id);
-    res.status(200).json({ success: true, message: 'RAM option deleted.' });
   });
 }
 

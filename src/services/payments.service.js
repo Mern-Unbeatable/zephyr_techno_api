@@ -61,13 +61,12 @@ class PaymentsService {
     const successUrl = `${successBase}${successBase.includes('?') ? '&' : '?'}orderId=${order.id}`;
     const cancelUrl = `${cancelBase}${cancelBase.includes('?') ? '&' : '?'}orderId=${order.id}`;
 
+    // Address/contact already collected on website checkout — Stripe is payment-only.
     const session = await this.stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
       customer_email: userEmail || undefined,
-      billing_address_collection: 'required',
-      shipping_address_collection: { allowed_countries: ['GB'] },
-      phone_number_collection: { enabled: true },
+      billing_address_collection: 'auto',
       line_items,
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -105,27 +104,8 @@ class PaymentsService {
 
     if (!orderId) throw new Error('Order id missing from session metadata');
 
-    const shippingSource = session.shipping_details || session.customer_details || null;
-    const rawAddress = shippingSource?.address || null;
-    const normalizedStripeAddress = rawAddress
-      ? {
-          fullName: shippingSource?.name || 'Stripe Customer',
-          phone: shippingSource?.phone || null,
-          street: [rawAddress.line1, rawAddress.line2].filter(Boolean).join(', '),
-          city: rawAddress.city || 'Unknown',
-          state: rawAddress.state || null,
-          zipCode: rawAddress.postal_code || 'Unknown',
-          country: rawAddress.country === 'GB' ? 'United Kingdom' : (rawAddress.country || 'United Kingdom'),
-        }
-      : null;
-
-    // Update order status to PROCESSING and payment status to PAID
-    const updatedOrder = await orderService.confirmPayment(
-      orderId,
-      'PROCESSING',
-      'PAID',
-      normalizedStripeAddress,
-    );
+    // Keep website checkout address; Stripe is payment-only in this flow.
+    const updatedOrder = await orderService.confirmPayment(orderId, 'PROCESSING', 'PAID');
 
     return updatedOrder;
   }

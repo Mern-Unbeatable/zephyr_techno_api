@@ -11,6 +11,8 @@ yarn-error.log*
 
 # Prisma
 /src/generated/prisma
+prisma/backups/*.json
+!prisma/backups/.gitkeep
 
 # OS
 .DS_Store

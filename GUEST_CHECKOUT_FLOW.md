@@ -104,7 +104,7 @@ export function clearGuestSessionId() {
 
 **Frontend Code:**
 ```javascript
-async function addToCartGuest({ productId, colorId, storageOptionId, ramOptionId, quantity }) {
+async function addToCartGuest({ productId, colorId, storageOptionId, quantity }) {
   const guestSessionId = getOrCreateGuestSessionId();
 
   const res = await fetch('/api/cart', {
@@ -115,7 +115,6 @@ async function addToCartGuest({ productId, colorId, storageOptionId, ramOptionId
       productId,
       colorId,
       storageOptionId,
-      ramOptionId,
       quantity,
     }),
   });
@@ -131,7 +130,6 @@ async function addToCartGuest({ productId, colorId, storageOptionId, ramOptionId
   "productId": "prod-123",
   "colorId": "color-red",
   "storageOptionId": "storage-256gb",
-  "ramOptionId": "ram-12gb",
   "quantity": 1
 }
 ```
@@ -141,7 +139,7 @@ async function addToCartGuest({ productId, colorId, storageOptionId, ramOptionId
 2. Finds or creates `Cart` with `sessionId = guestSessionId` (userId = null)
 3. Validates product exists and is ACTIVE
 4. Checks stock availability
-5. If same product + color + storage + RAM already in cart → increases quantity
+5. If same product + color + storage already in cart → increases quantity
 6. Otherwise → creates new CartItem
 7. Returns formatted cart item
 
@@ -698,11 +696,11 @@ function getAuthHeaders() {
   };
 }
 
-async function addToCartAuth({ productId, colorId, storageOptionId, ramOptionId, quantity }) {
+async function addToCartAuth({ productId, colorId, storageOptionId, quantity }) {
   const res = await fetch('/api/cart', {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ productId, colorId, storageOptionId, ramOptionId, quantity }),
+    body: JSON.stringify({ productId, colorId, storageOptionId, quantity }),
   });
   return res.json();
 }
@@ -720,7 +718,6 @@ Content-Type: application/json
   "productId": "prod-123",
   "colorId": "color-red",
   "storageOptionId": "storage-256gb",
-  "ramOptionId": "ram-12gb",
   "quantity": 1
 }
 ```
@@ -1184,7 +1181,7 @@ BACKEND (inside login service):
 4. For each item in guest cart:
 
    a. Check if same product config exists in user cart:
-      (same productId + colorId + storageOptionId + ramOptionId)
+      (same productId + colorId + storageOptionId)
 
    b. IF DUPLICATE found:
       - combinedQty = userItem.quantity + guestItem.quantity
@@ -1208,14 +1205,14 @@ BACKEND (inside login service):
 
 ```
 Guest Cart:
-  - iPhone 14 Pro (Red, 256GB, 12GB RAM)  × 2
+  - iPhone 14 Pro (Red, 256GB)  × 2
 
 User Cart: (empty)
 
 ────────────────────────── After Login ──────────────────────────
 
 User Cart:
-  - iPhone 14 Pro (Red, 256GB, 12GB RAM)  × 2   ✅ migrated
+  - iPhone 14 Pro (Red, 256GB)  × 2   ✅ migrated
 ```
 
 ---
@@ -1244,17 +1241,17 @@ User Cart:
 
 ```
 Guest Cart:
-  - iPhone 14 Pro (Red, 256GB, 12GB RAM) × 2
+  - iPhone 14 Pro (Red, 256GB) × 2
 
 User Cart:
-  - iPhone 14 Pro (Red, 256GB, 12GB RAM) × 3
+  - iPhone 14 Pro (Red, 256GB) × 3
 
 Stock Available: 10
 
 ────────────────────────── After Login ──────────────────────────
 
 User Cart:
-  - iPhone 14 Pro (Red, 256GB, 12GB RAM) × 5   ✅ (3 + 2, within stock)
+  - iPhone 14 Pro (Red, 256GB) × 5   ✅ (3 + 2, within stock)
 ```
 
 ---
@@ -1263,17 +1260,17 @@ User Cart:
 
 ```
 Guest Cart:
-  - iPhone 14 Pro (Red, 256GB, 12GB RAM) × 5
+  - iPhone 14 Pro (Red, 256GB) × 5
 
 User Cart:
-  - iPhone 14 Pro (Red, 256GB, 12GB RAM) × 6
+  - iPhone 14 Pro (Red, 256GB) × 6
 
 Stock Available: 9
 
 ────────────────────────── After Login ──────────────────────────
 
 User Cart:
-  - iPhone 14 Pro (Red, 256GB, 12GB RAM) × 6   ⚠️ guest qty skipped
+  - iPhone 14 Pro (Red, 256GB) × 6   ⚠️ guest qty skipped
                                                    (5 + 6 = 11 > 9 stock)
 ```
 
@@ -1346,12 +1343,12 @@ function guestHeaders() {
 
 // ─── Cart Operations ──────────────────────────────────────────────────────────
 
-export async function addToCart({ productId, colorId, storageOptionId, ramOptionId, quantity }) {
+export async function addToCart({ productId, colorId, storageOptionId, quantity }) {
   if (isLoggedIn()) {
     return fetch('/api/cart', {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ productId, colorId, storageOptionId, ramOptionId, quantity }),
+      body: JSON.stringify({ productId, colorId, storageOptionId, quantity }),
     }).then(r => r.json());
   }
 
@@ -1359,7 +1356,7 @@ export async function addToCart({ productId, colorId, storageOptionId, ramOption
   return fetch('/api/cart', {
     method: 'POST',
     headers: guestHeaders(),
-    body: JSON.stringify({ guestSessionId, productId, colorId, storageOptionId, ramOptionId, quantity }),
+    body: JSON.stringify({ guestSessionId, productId, colorId, storageOptionId, quantity }),
   }).then(r => r.json());
 }
 

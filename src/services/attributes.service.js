@@ -4,14 +4,13 @@ import { buildImageUrl } from '../utils/url.js';
 import { sortStorageOptionsBySize } from '../utils/stock.js';
 
 /**
- * Single service covering CRUD for all 7 admin-managed product attribute models:
+ * Single service covering CRUD for all admin-managed product attribute models:
  *  - Category
  *  - Series
  *  - DeviceModel  (requires seriesId)
  *  - Condition    (includes basePrice)
  *  - Color
  *  - StorageOption
- *  - RamOption
  */
 class AttributesService {
   constructor() {
@@ -564,52 +563,17 @@ class AttributesService {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // RAM OPTION
-  // ─────────────────────────────────────────────────────────────
-
-  async createRamOption({ name }) {
-    name = this.#requireString(name, 'RAM name');
-    const deletedRecord = await this.#checkUniqueAndGetDeleted('ramOption', { name }, 'RAM option already exists.');
-    if (deletedRecord) {
-      return prisma.ramOption.update({ where: { id: deletedRecord.id }, data: { isDeleted: false, deletedAt: null } });
-    }
-    return prisma.ramOption.create({ data: { name } });
-  }
-
-  async getAllRamOptions() {
-    return prisma.ramOption.findMany({ orderBy: { name: 'asc' } });
-  }
-
-  async getRamOptionById(id) {
-    return this.#findOrFail('ramOption', id, 'RAM option');
-  }
-
-  async updateRamOption(id, { name }) {
-    await this.#findOrFail('ramOption', id, 'RAM option');
-    name = this.#requireString(name, 'RAM name');
-    const deletedRecord = await this.#checkUniqueAndGetDeleted('ramOption', { name }, 'RAM option already exists.', id);
-    if (deletedRecord) throw new AppError('Name is currently used by a deleted RAM option. Please use a different name.', 409);
-    return prisma.ramOption.update({ where: { id }, data: { name } });
-  }
-
-  async deleteRamOption(id) {
-    await this.#findOrFail('ramOption', id, 'RAM option');
-    return this.#safeDelete('ramOption', id, 'RAM option');
-  }
-
-  // ─────────────────────────────────────────────────────────────
   // CONSOLIDATED ALL-OPTIONS (For product create/update forms)
   // ─────────────────────────────────────────────────────────────
 
   async getAllAttributeOptions() {
-    const [categories, series, models, conditions, colors, storageOptions, ramOptions] = await Promise.all([
+    const [categories, series, models, conditions, colors, storageOptions] = await Promise.all([
       prisma.category.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
       prisma.series.findMany({ select: { id: true, name: true, image: true } }), // Preserve insertion order
       prisma.deviceModel.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, seriesId: true } }),
       prisma.condition.findMany({ orderBy: { createdAt: 'desc' }, select: { id: true, name: true } }),
       prisma.color.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
       prisma.storageOption.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
-      prisma.ramOption.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
     ]);
 
     // Format series with image URLs
@@ -628,7 +592,6 @@ class AttributesService {
       conditions: filteredConditions,
       colors,
       storageOptions: sortStorageOptionsBySize(storageOptions),
-      ramOptions,
     };
   }
 
@@ -654,7 +617,6 @@ class AttributesService {
       series: opts.series || [],
       colors: opts.colors || [],
       storageOptions: opts.storageOptions || [],
-      ramOptions: opts.ramOptions || [],
     };
 
     this._publicAttributesCache = { ts: now, data: response };

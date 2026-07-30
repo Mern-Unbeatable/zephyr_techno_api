@@ -2,7 +2,7 @@ import prisma from "../utils/prisma.js";
 import AppError from "../utils/app-error.js";
 import { buildImageUrl, resolveProductThumbnail } from "../utils/url.js";
 import promoService from "./promo.service.js";
-import { resolveStorageStock, resolveStoragePrice, syncProductStockTotal } from "../utils/stock.js";
+import { resolveVariantStock, resolveStoragePrice, syncProductStockTotal } from "../utils/stock.js";
 
 /**
  * OrderService
@@ -15,15 +15,43 @@ class OrderService {
     select: { imageUrl: true, colorId: true },
   };
 
-  async #getItemStorageStock(item) {
-    const bridge = await prisma.productStorageOption.findFirst({
-      where: {
-        productId: item.productId,
-        storageOptionId: item.storageOptionId,
-      },
-      select: { stockQuantity: true },
+  async #getItemVariantStock(item, client = prisma) {
+    const [variantBridge, storageBridge, colorBridge] = await Promise.all([
+      item.colorId && item.storageOptionId
+        ? client.productVariantStock.findUnique({
+            where: {
+              productId_colorId_storageOptionId: {
+                productId: item.productId,
+                colorId: item.colorId,
+                storageOptionId: item.storageOptionId,
+              },
+            },
+            select: { stockQuantity: true },
+          })
+        : Promise.resolve(null),
+      client.productStorageOption.findFirst({
+        where: {
+          productId: item.productId,
+          storageOptionId: item.storageOptionId,
+        },
+        select: { stockQuantity: true },
+      }),
+      item.colorId
+        ? client.productColor.findFirst({
+            where: {
+              productId: item.productId,
+              colorId: item.colorId,
+            },
+            select: { stockQuantity: true },
+          })
+        : Promise.resolve(null),
+    ]);
+    return resolveVariantStock({
+      variantBridge,
+      colorBridge,
+      storageBridge,
+      productStock: item.product?.stockQuantity ?? 0,
     });
-    return resolveStorageStock(bridge, item.product.stockQuantity);
   }
 
   async #getItemUnitPrice(item) {
@@ -49,29 +77,22 @@ class OrderService {
    * @param {string} data.shippingMethod - Optional: e.g., "Standard Delivery", "Express Delivery"
    * @param {number} data.shippingCost - Optional: shipping cost (default 0)
    * @param {string} data.promoCode - Optional: promo code to apply
-   * @param {Object} data.directProduct - Optional: direct product checkout { productId, colorId?, storageOptionId?, ramOptionId?, quantity }
+   * @param {Object} data.directProduct - Optional: direct product checkout { productId, colorId?, storageOptionId?, quantity }
    */
   async createOrder(userId, guestSessionId, guestEmail, data) {
     const { shippingAddress, paymentMethod, cartItemIds, shippingMethod, shippingCost = 0, promoCode, directProduct } = data;
 
-    // Shipping details can be collected on Stripe. If checkout page doesn't send them,
-    // create a placeholder address and replace it after payment confirmation.
-    const normalizedAddress = shippingAddress
-      && shippingAddress.fullName
-      && shippingAddress.street
-      && shippingAddress.city
-      && shippingAddress.zipCode
-      && shippingAddress.country
-      ? shippingAddress
-      : {
-          fullName: guestEmail || 'Stripe Customer',
-          phone: null,
-          street: 'To be provided on Stripe',
-          city: 'Pending',
-          state: null,
-          zipCode: 'Pending',
-          country: 'United Kingdom',
-        };
+    if (!shippingAddress) {
+      throw new AppError("Shipping address is required", 400);
+    }
+
+    // Validate required address fields
+    const { fullName, street, city, zipCode, country } = shippingAddress;
+    if (!fullName || !street || !city || !zipCode || !country) {
+      throw new AppError("Complete shipping address required (fullName, street, city, zipCode, country)", 400);
+    }
+
+    const normalizedAddress = shippingAddress;
 
     let cartItems;
 
@@ -82,7 +103,7 @@ class OrderService {
 
     // Handle direct product checkout
     if (directProduct) {
-      const { productId, colorId, storageOptionId, ramOptionId, quantity } = directProduct;
+      const { productId, colorId, storageOptionId, quantity } = directProduct;
       
       if (!productId) {
         throw new AppError("Product ID is required for direct checkout", 400);
@@ -112,12 +133,10 @@ class OrderService {
         productId,
         colorId,
         storageOptionId,
-        ramOptionId,
         quantity,
         product,
         color: colorId ? { id: colorId, name: '' } : null,
         storageOption: storageOptionId ? { id: storageOptionId, name: '' } : null,
-        ramOption: ramOptionId ? { id: ramOptionId, name: '' } : null,
       }];
     } else {
       // Handle cart-based checkout (both authenticated users and guests)
@@ -149,7 +168,6 @@ class OrderService {
           },
           color: { select: { id: true, name: true } },
           storageOption: { select: { id: true, name: true } },
-          ramOption: { select: { id: true, name: true } },
         },
       });
 
@@ -174,7 +192,7 @@ class OrderService {
         );
       }
 
-      const availableStock = await this.#getItemStorageStock(item);
+      const availableStock = await this.#getItemVariantStock(item);
       if (availableStock < item.quantity) {
         throw new AppError(
           `Insufficient stock for "${item.product.title}". Only ${availableStock} available.`,
@@ -259,7 +277,6 @@ class OrderService {
               productId: item.productId,
               colorId: item.colorId,
               storageOptionId: item.storageOptionId,
-              ramOptionId: item.ramOptionId,
               quantity: item.quantity,
               priceAtPurchase: item.unitPrice,
             })),
@@ -355,7 +372,6 @@ class OrderService {
               },
               color: { select: { id: true, name: true } },
               storageOption: { select: { id: true, name: true } },
-              ramOption: { select: { id: true, name: true } },
             },
           },
         },
@@ -412,7 +428,6 @@ class OrderService {
             },
             color: { select: { id: true, name: true } },
             storageOption: { select: { id: true, name: true } },
-            ramOption: { select: { id: true, name: true } },
           },
         },
       },
@@ -526,7 +541,6 @@ class OrderService {
             },
             color: { select: { id: true, name: true } },
             storageOption: { select: { id: true, name: true } },
-            ramOption: { select: { id: true, name: true } },
           },
         },
       },
@@ -578,7 +592,6 @@ class OrderService {
             },
             color: { select: { id: true, name: true } },
             storageOption: { select: { id: true, name: true } },
-            ramOption: { select: { id: true, name: true } },
           },
         },
       },
@@ -619,7 +632,6 @@ class OrderService {
             },
             color: { select: { id: true, name: true } },
             storageOption: { select: { id: true, name: true } },
-            ramOption: { select: { id: true, name: true } },
           },
         },
       },
@@ -644,14 +656,10 @@ class OrderService {
         if (!product) {
           throw new AppError(`Product not found for order item ${item.id}`, 404);
         }
-        const bridge = await tx.productStorageOption.findFirst({
-          where: {
-            productId: item.productId,
-            storageOptionId: item.storageOptionId,
-          },
-          select: { stockQuantity: true },
-        });
-        const availableStock = resolveStorageStock(bridge, product.stockQuantity);
+        const availableStock = await this.#getItemVariantStock(
+          { ...item, product },
+          tx,
+        );
         if (availableStock < item.quantity) {
           throw new AppError(
             `Insufficient stock to confirm payment for "${product.title}".`,
@@ -660,16 +668,27 @@ class OrderService {
         }
       }
 
-      // Decrement per-storage stock only after payment is confirmed.
+      // Decrement matrix (color × storage) stock only after payment is confirmed.
       const touchedProductIds = new Set();
       for (const item of existing.orderItems) {
-        await tx.productStorageOption.updateMany({
-          where: {
-            productId: item.productId,
-            storageOptionId: item.storageOptionId,
-          },
-          data: { stockQuantity: { decrement: item.quantity } },
-        });
+        if (item.colorId && item.storageOptionId) {
+          await tx.productVariantStock.updateMany({
+            where: {
+              productId: item.productId,
+              colorId: item.colorId,
+              storageOptionId: item.storageOptionId,
+            },
+            data: { stockQuantity: { decrement: item.quantity } },
+          });
+        } else {
+          await tx.productStorageOption.updateMany({
+            where: {
+              productId: item.productId,
+              storageOptionId: item.storageOptionId,
+            },
+            data: { stockQuantity: { decrement: item.quantity } },
+          });
+        }
         touchedProductIds.add(item.productId);
       }
 
@@ -686,7 +705,6 @@ class OrderService {
             productId: item.productId,
             colorId: item.colorId,
             storageOptionId: item.storageOptionId,
-            ramOptionId: item.ramOptionId,
           }));
 
           if (itemMatchers.length > 0) {
@@ -750,7 +768,6 @@ class OrderService {
               },
               color: { select: { id: true, name: true } },
               storageOption: { select: { id: true, name: true } },
-              ramOption: { select: { id: true, name: true } },
             },
           },
         },
@@ -801,7 +818,6 @@ class OrderService {
               },
               color: { select: { id: true, name: true } },
               storageOption: { select: { id: true, name: true } },
-              ramOption: { select: { id: true, name: true } },
             },
           },
         },
@@ -1082,10 +1098,6 @@ class OrderService {
             storage: {
               id: item.storageOption.id,
               name: item.storageOption.name,
-            },
-            ram: {
-              id: item.ramOption.id,
-              name: item.ramOption.name,
             },
           },
           subtotal: parseFloat(item.priceAtPurchase) * item.quantity,

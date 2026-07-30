@@ -1,7 +1,7 @@
 import prisma from "../utils/prisma.js";
 import AppError from "../utils/app-error.js";
 import { resolveProductThumbnail } from "../utils/url.js";
-import { resolveStorageStock, resolveStoragePrice } from "../utils/stock.js";
+import { resolveVariantStock, resolveStoragePrice } from "../utils/stock.js";
 
 /**
  * CartService
@@ -14,13 +14,46 @@ class CartService {
     select: { imageUrl: true, colorId: true },
   };
 
+  async #lookupVariantStock(productId, colorId, storageOptionId, productStock = 0, client = prisma) {
+    const [variantBridge, storageBridge, colorBridge] = await Promise.all([
+      colorId && storageOptionId
+        ? client.productVariantStock.findUnique({
+            where: {
+              productId_colorId_storageOptionId: {
+                productId,
+                colorId,
+                storageOptionId,
+              },
+            },
+            select: { stockQuantity: true },
+          })
+        : Promise.resolve(null),
+      client.productStorageOption.findFirst({
+        where: { productId, storageOptionId },
+        select: { stockQuantity: true },
+      }),
+      colorId
+        ? client.productColor.findFirst({
+            where: { productId, colorId },
+            select: { stockQuantity: true },
+          })
+        : Promise.resolve(null),
+    ]);
+    return resolveVariantStock({
+      variantBridge,
+      colorBridge,
+      storageBridge,
+      productStock,
+    });
+  }
+
   /**
    * Add product to cart with selected options
    * Supports both authenticated users (userId) and guests (guestSessionId)
-   * User selects: color, storage, RAM when adding to cart
+   * User selects: color, storage when adding to cart
    */
   async addToCart(userId, guestSessionId, data) {
-    const { productId, colorId, storageOptionId, ramOptionId, quantity } = data;
+    const { productId, colorId, storageOptionId, quantity } = data;
 
     // Validate that either userId or guestSessionId is provided
     if (!userId && !guestSessionId) {
@@ -45,9 +78,10 @@ class CartService {
           where: { storageOptionId, isDeleted: false },
           include: { storageOption: true },
         },
-        ramOptions: {
-          where: { ramOptionId },
-          include: { ramOption: true },
+        variantStocks: {
+          where: { colorId, storageOptionId },
+          select: { stockQuantity: true },
+          take: 1,
         },
       },
     });
@@ -67,20 +101,19 @@ class CartService {
     if (product.storageOptions.length === 0) {
       throw new AppError("Selected storage option is not available for this product", 400);
     }
-    if (product.ramOptions.length === 0) {
-      throw new AppError("Selected RAM option is not available for this product", 400);
-    }
 
-    // Check stock availability for the selected storage option
-    const storageStock = resolveStorageStock(
-      product.storageOptions[0],
-      product.stockQuantity,
-    );
-    if (storageStock <= 0) {
+    // Check stock availability for the selected color + storage combo
+    const availableStock = resolveVariantStock({
+      variantBridge: product.variantStocks[0] || null,
+      colorBridge: product.colors[0],
+      storageBridge: product.storageOptions[0],
+      productStock: product.stockQuantity,
+    });
+    if (availableStock <= 0) {
       throw new AppError("Product is currently out of stock", 400);
     }
-    if (storageStock < qty) {
-      throw new AppError(`Cannot add ${qty} items. Only ${storageStock} item(s) in stock`, 400);
+    if (availableStock < qty) {
+      throw new AppError(`Cannot add ${qty} items. Only ${availableStock} item(s) in stock`, 400);
     }
 
     // Ensure cart exists (create if missing)
@@ -105,7 +138,6 @@ class CartService {
         productId,
         colorId,
         storageOptionId,
-        ramOptionId,
       },
     });
 
@@ -114,14 +146,14 @@ class CartService {
       const newQuantity = existingCartItem.quantity + qty;
 
       // Validate against stock
-      if (storageStock < newQuantity) {
-        if (storageStock <= existingCartItem.quantity) {
+      if (availableStock < newQuantity) {
+        if (availableStock <= existingCartItem.quantity) {
           throw new AppError(
-            `Cannot add more. You already have all available items (${storageStock}) in your cart.`,
+            `Cannot add more. You already have all available items (${availableStock}) in your cart.`,
             400,
           );
         } else {
-          const remaining = storageStock - existingCartItem.quantity;
+          const remaining = availableStock - existingCartItem.quantity;
           throw new AppError(
             `Cannot add ${qty} more. You can only add ${remaining} more item(s).`,
             400,
@@ -136,15 +168,21 @@ class CartService {
           product: {
             include: {
               productGalleries: this.#galleryInclude,
+              colors: {
+                where: { isDeleted: false },
+                select: { colorId: true, stockQuantity: true },
+              },
               storageOptions: {
                 where: { isDeleted: false },
                 select: { storageOptionId: true, stockQuantity: true, price: true },
+              },
+              variantStocks: {
+                select: { colorId: true, storageOptionId: true, stockQuantity: true },
               },
             },
           },
           color: true,
           storageOption: true,
-          ramOption: true,
         },
       });
 
@@ -153,7 +191,6 @@ class CartService {
         product,
         color: product.colors[0].color,
         storageOption: product.storageOptions[0].storageOption,
-        ramOption: product.ramOptions[0].ramOption,
       });
     }
 
@@ -164,22 +201,27 @@ class CartService {
         productId,
         colorId,
         storageOptionId,
-        ramOptionId,
         quantity: qty,
       },
       include: {
         product: {
           include: {
             productGalleries: this.#galleryInclude,
+            colors: {
+              where: { isDeleted: false },
+              select: { colorId: true, stockQuantity: true },
+            },
             storageOptions: {
               where: { isDeleted: false },
               select: { storageOptionId: true, stockQuantity: true, price: true },
+            },
+            variantStocks: {
+              select: { colorId: true, storageOptionId: true, stockQuantity: true },
             },
           },
         },
         color: true,
         storageOption: true,
-        ramOption: true,
       },
     });
 
@@ -207,15 +249,21 @@ class CartService {
             product: {
               include: {
                 productGalleries: this.#galleryInclude,
+                colors: {
+                  where: { isDeleted: false },
+                  select: { colorId: true, stockQuantity: true },
+                },
                 storageOptions: {
                   where: { isDeleted: false },
                   select: { storageOptionId: true, stockQuantity: true, price: true },
+                },
+                variantStocks: {
+                  select: { colorId: true, storageOptionId: true, stockQuantity: true },
                 },
               },
             },
             color: true,
             storageOption: true,
-            ramOption: true,
           },
           orderBy: { createdAt: 'desc' },
         },
@@ -281,7 +329,6 @@ class CartService {
               productId: cartItem.productId,
               colorId: cartItem.colorId,
               storageOptionId: cartItem.storageOptionId,
-              ramOptionId: cartItem.ramOptionId,
             },
             include: { product: true, cart: true },
           });
@@ -297,20 +344,15 @@ class CartService {
       throw new AppError('Unauthorized to modify this cart item', 403);
     }
 
-    // Check stock for the selected storage option
-    const storageBridge = await prisma.productStorageOption.findFirst({
-      where: {
-        productId: cartItem.productId,
-        storageOptionId: cartItem.storageOptionId,
-      },
-      select: { stockQuantity: true },
-    });
-    const storageStock = resolveStorageStock(
-      storageBridge,
+    // Check stock for the selected color + storage combo
+    const availableStock = await this.#lookupVariantStock(
+      cartItem.productId,
+      cartItem.colorId,
+      cartItem.storageOptionId,
       cartItem.product.stockQuantity,
     );
-    if (storageStock < qty) {
-      throw new AppError(`Only ${storageStock} items in stock`, 400);
+    if (availableStock < qty) {
+      throw new AppError(`Only ${availableStock} items in stock`, 400);
     }
 
     const updated = await prisma.cartItem.update({
@@ -320,15 +362,21 @@ class CartService {
         product: {
           include: {
             productGalleries: this.#galleryInclude,
+            colors: {
+              where: { isDeleted: false },
+              select: { colorId: true, stockQuantity: true },
+            },
             storageOptions: {
               where: { isDeleted: false },
               select: { storageOptionId: true, stockQuantity: true, price: true },
+            },
+            variantStocks: {
+              select: { colorId: true, storageOptionId: true, stockQuantity: true },
             },
           },
         },
         color: true,
         storageOption: true,
-        ramOption: true,
       },
     });
 
@@ -371,7 +419,6 @@ class CartService {
               productId: cartItem.productId,
               colorId: cartItem.colorId,
               storageOptionId: cartItem.storageOptionId,
-              ramOptionId: cartItem.ramOptionId,
             },
           });
           if (migrated) await prisma.cartItem.delete({ where: { id: migrated.id } });
@@ -417,10 +464,20 @@ class CartService {
     const storageBridge = item.product.storageOptions?.find(
       (row) => row.storageOptionId === item.storageOptionId,
     );
-    const storageStock = resolveStorageStock(
-      storageBridge,
-      item.product.stockQuantity,
+    const colorBridge = item.product.colors?.find(
+      (row) => row.colorId === item.colorId,
     );
+    const variantBridge = item.product.variantStocks?.find(
+      (row) =>
+        row.colorId === item.colorId &&
+        row.storageOptionId === item.storageOptionId,
+    );
+    const availableStock = resolveVariantStock({
+      variantBridge,
+      colorBridge,
+      storageBridge,
+      productStock: item.product.stockQuantity,
+    });
     const unitPrice = resolveStoragePrice(
       storageBridge,
       item.product.basePrice,
@@ -435,7 +492,7 @@ class CartService {
         id: item.product.id,
         title: item.product.title,
         basePrice: unitPrice,
-        stockQuantity: storageStock,
+        stockQuantity: availableStock,
         seriesId: item.product.seriesId,
         deviceModelId: item.product.deviceModelId,
         thumbnail,
@@ -448,10 +505,6 @@ class CartService {
         storage: {
           id: item.storageOption.id,
           name: item.storageOption.name,
-        },
-        ram: {
-          id: item.ramOption.id,
-          name: item.ramOption.name,
         },
       },
       // Calculate item total (price × quantity)
@@ -502,7 +555,6 @@ class CartService {
             productId: guestItem.productId,
             colorId: guestItem.colorId,
             storageOptionId: guestItem.storageOptionId,
-            ramOptionId: guestItem.ramOptionId,
           },
         });
 
@@ -515,19 +567,14 @@ class CartService {
             where: { id: guestItem.productId },
             select: { stockQuantity: true },
           });
-          const storageBridge = await prisma.productStorageOption.findFirst({
-            where: {
-              productId: guestItem.productId,
-              storageOptionId: guestItem.storageOptionId,
-            },
-            select: { stockQuantity: true },
-          });
-          const storageStock = resolveStorageStock(
-            storageBridge,
+          const availableStock = await this.#lookupVariantStock(
+            guestItem.productId,
+            guestItem.colorId,
+            guestItem.storageOptionId,
             product?.stockQuantity ?? 0,
           );
 
-          if (storageStock >= newQuantity) {
+          if (availableStock >= newQuantity) {
             await prisma.cartItem.update({
               where: { id: existingItem.id },
               data: { quantity: newQuantity },
@@ -541,7 +588,6 @@ class CartService {
               productId: guestItem.productId,
               colorId: guestItem.colorId,
               storageOptionId: guestItem.storageOptionId,
-              ramOptionId: guestItem.ramOptionId,
               quantity: guestItem.quantity,
             },
           });

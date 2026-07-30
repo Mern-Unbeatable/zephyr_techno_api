@@ -5,7 +5,7 @@ class PaymentsController {
   // POST /api/public/product/checkout
   // Support two modes:
   // 1. Cart checkout: { shippingAddress, cartItemIds, ... }
-  // 2. Direct product checkout: { productId, colorId, storageOptionId, ramOptionId, quantity, shippingAddress, ... }
+  // 2. Direct product checkout: { productId, colorId, storageOptionId, quantity, shippingAddress, ... }
   // Supports both authenticated users and guest checkout
   createCheckoutSession = asyncHandler(async (req, res) => {
     const userId = req.user?.id || null; // Allow null for guest checkout
@@ -20,7 +20,18 @@ class PaymentsController {
       });
     }
 
-    const { shippingAddress, cartItemIds, shippingMethod, shippingCost, promoCode, productId, colorId, storageOptionId, ramOptionId, quantity } = req.body;
+    // Guest checkout requires email (collected on website checkout page)
+    if (!userId && !guestEmail) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Guest checkout requires guestEmail' 
+      });
+    }
+
+    const { shippingAddress, cartItemIds, shippingMethod, shippingCost, promoCode, productId, colorId, storageOptionId, quantity } = req.body;
+    if (!shippingAddress) {
+      return res.status(400).json({ success: false, message: 'shippingAddress required' });
+    }
 
     // Check if direct product checkout
     let directProduct = null;
@@ -29,7 +40,6 @@ class PaymentsController {
         productId,
         colorId: colorId || null,
         storageOptionId: storageOptionId || null,
-        ramOptionId: ramOptionId || null,
         quantity: parseInt(quantity) || 1,
       };
     }
@@ -38,7 +48,7 @@ class PaymentsController {
       userId,
       guestSessionId,
       guestEmail,
-      shippingAddress || null,
+      shippingAddress,
       cartItemIds,
       shippingMethod,
       shippingCost,

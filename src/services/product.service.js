@@ -1,7 +1,13 @@
 import prisma from "../utils/prisma.js";
 import AppError from "../utils/app-error.js";
 import { buildImageUrl } from "../utils/url.js";
-import { sumStorageStocks, minStoragePrice, sortStorageOptionsBySize } from "../utils/stock.js";
+import {
+  sumStorageStocks,
+  sumVariantStocks,
+  minStoragePrice,
+  sortStorageOptionsBySize,
+  variantStockKey,
+} from "../utils/stock.js";
 
 class ProductService {
   #activeGalleryInclude = {
@@ -22,13 +28,6 @@ class ProductService {
     where: {
       isDeleted: false,
       color: { isDeleted: false },
-    },
-  };
-
-  #activeRamInclude = {
-    where: {
-      isDeleted: false,
-      ramOption: { isDeleted: false },
     },
   };
 
@@ -121,6 +120,175 @@ class ProductService {
     }));
   }
 
+  #parseColorStocks(raw, colorIds, { fallbackStock = 0 } = {}) {
+    const allowed = new Set(colorIds || []);
+    if (!colorIds?.length) {
+      return new Map();
+    }
+
+    let entries = raw;
+    if (entries === undefined || entries === null || entries === '') {
+      return new Map(
+        colorIds.map((id) => [id, Math.max(0, Number(fallbackStock) || 0)]),
+      );
+    }
+
+    if (typeof entries === 'string') {
+      entries = this.#parseJsonField(entries, 'colorStocks');
+    }
+
+    if (!Array.isArray(entries)) {
+      throw new AppError(
+        'Invalid colorStocks format. Must be a valid JSON array.',
+        400,
+      );
+    }
+
+    const stockMap = new Map();
+    for (const entry of entries) {
+      const colorId = entry?.colorId || entry?.id;
+      if (!colorId || !allowed.has(colorId)) continue;
+      stockMap.set(colorId, Math.max(0, parseInt(entry.stockQuantity, 10) || 0));
+    }
+
+    for (const colorId of colorIds) {
+      if (!stockMap.has(colorId)) {
+        stockMap.set(colorId, Math.max(0, Number(fallbackStock) || 0));
+      }
+    }
+
+    return stockMap;
+  }
+
+  /**
+   * Parse color × storage matrix stocks.
+   * Returns Map keyed by `${colorId}::${storageOptionId}` → stockQuantity.
+   * When raw is empty, fills from colorStockMap × storageVariantMap (min) or zeros.
+   */
+  #parseVariantStocks(
+    raw,
+    colorIds,
+    storageIds,
+    { colorStockMap = null, storageVariantMap = null } = {},
+  ) {
+    const stockMap = new Map();
+    if (!colorIds?.length || !storageIds?.length) {
+      return stockMap;
+    }
+
+    let entries = raw;
+    if (typeof entries === 'string') {
+      entries = this.#parseJsonField(entries, 'variantStocks');
+    }
+
+    if (Array.isArray(entries)) {
+      const colorSet = new Set(colorIds);
+      const storageSet = new Set(storageIds);
+      for (const entry of entries) {
+        const colorId = entry?.colorId;
+        const storageOptionId = entry?.storageOptionId;
+        if (!colorId || !storageOptionId) continue;
+        if (!colorSet.has(colorId) || !storageSet.has(storageOptionId)) continue;
+        stockMap.set(
+          variantStockKey(colorId, storageOptionId),
+          Math.max(0, parseInt(entry.stockQuantity, 10) || 0),
+        );
+      }
+    } else if (raw !== undefined && raw !== null && raw !== '') {
+      throw new AppError(
+        'Invalid variantStocks format. Must be a valid JSON array.',
+        400,
+      );
+    }
+
+    for (const colorId of colorIds) {
+      for (const storageOptionId of storageIds) {
+        const key = variantStockKey(colorId, storageOptionId);
+        if (stockMap.has(key)) continue;
+
+        const colorStock = colorStockMap?.has(colorId)
+          ? colorStockMap.get(colorId)
+          : null;
+        const storageStock = storageVariantMap?.get(storageOptionId)?.stockQuantity;
+        if (colorStock != null && storageStock != null) {
+          stockMap.set(key, Math.min(colorStock, storageStock));
+        } else if (storageStock != null && (colorStock == null || colorStock === 0)) {
+          // Legacy: only storage stock set → equal share across colors
+          stockMap.set(
+            key,
+            Math.floor((Number(storageStock) || 0) / Math.max(colorIds.length, 1)),
+          );
+        } else {
+          stockMap.set(key, Math.max(0, Number(colorStock) || 0));
+        }
+      }
+    }
+
+    return stockMap;
+  }
+
+  #aggregateVariantStockMap(stockMap) {
+    const byColor = new Map();
+    const byStorage = new Map();
+    let total = 0;
+    for (const [key, qty] of stockMap.entries()) {
+      const amount = Math.max(0, Number(qty) || 0);
+      total += amount;
+      const [colorId, storageOptionId] = key.split('::');
+      byColor.set(colorId, (byColor.get(colorId) || 0) + amount);
+      byStorage.set(storageOptionId, (byStorage.get(storageOptionId) || 0) + amount);
+    }
+    return { total, byColor, byStorage };
+  }
+
+  async #syncProductColorOptions(tx, productId, colorIds, stockMap) {
+    const existing = await tx.productColor.findMany({
+      where: { productId },
+      includeDeleted: true,
+      select: { id: true, colorId: true, stockQuantity: true },
+    });
+    const existingByColorId = new Map(existing.map((row) => [row.colorId, row]));
+    const targetIds = new Set(colorIds);
+
+    await Promise.all(
+      existing
+        .filter((row) => !targetIds.has(row.colorId))
+        .map((row) => tx.productColor.delete({ where: { id: row.id } })),
+    );
+
+    await Promise.all(
+      colorIds.map(async (colorId) => {
+        const mappedStock = stockMap?.has(colorId)
+          ? stockMap.get(colorId)
+          : undefined;
+        const current = existingByColorId.get(colorId);
+
+        if (current) {
+          await tx.productColor.update({
+            where: { id: current.id },
+            data: {
+              stockQuantity:
+                mappedStock !== undefined
+                  ? mappedStock
+                  : (current.stockQuantity ?? 0),
+              isDeleted: false,
+              deletedAt: null,
+            },
+          });
+          return;
+        }
+
+        await tx.productColor.create({
+          data: {
+            productId,
+            colorId,
+            stockQuantity: mappedStock ?? 0,
+          },
+        });
+      }),
+    );
+  }
+
   async #syncProductStorageOptions(tx, productId, storageIds, variantMap) {
     const existing = await tx.productStorageOption.findMany({
       where: { productId },
@@ -168,6 +336,61 @@ class ProductService {
           },
         });
       }),
+    );
+  }
+
+  async #syncProductVariantStocks(tx, productId, colorIds, storageIds, stockMap) {
+    const existing = await tx.productVariantStock.findMany({
+      where: { productId },
+      select: { id: true, colorId: true, storageOptionId: true },
+    });
+
+    const targetKeys = new Set();
+    for (const colorId of colorIds) {
+      for (const storageOptionId of storageIds) {
+        targetKeys.add(variantStockKey(colorId, storageOptionId));
+      }
+    }
+
+    await Promise.all(
+      existing
+        .filter(
+          (row) =>
+            !targetKeys.has(variantStockKey(row.colorId, row.storageOptionId)),
+        )
+        .map((row) => tx.productVariantStock.delete({ where: { id: row.id } })),
+    );
+
+    const existingByKey = new Map(
+      existing.map((row) => [
+        variantStockKey(row.colorId, row.storageOptionId),
+        row,
+      ]),
+    );
+
+    await Promise.all(
+      colorIds.flatMap((colorId) =>
+        storageIds.map(async (storageOptionId) => {
+          const key = variantStockKey(colorId, storageOptionId);
+          const stockQuantity = stockMap.get(key) ?? 0;
+          const current = existingByKey.get(key);
+          if (current) {
+            await tx.productVariantStock.update({
+              where: { id: current.id },
+              data: { stockQuantity },
+            });
+            return;
+          }
+          await tx.productVariantStock.create({
+            data: {
+              productId,
+              colorId,
+              storageOptionId,
+              stockQuantity,
+            },
+          });
+        }),
+      ),
     );
   }
 
@@ -243,7 +466,10 @@ class ProductService {
       introduction: product.introduction,
       basePrice: product.basePrice,
       stockQuantity:
-        sumStorageStocks(product.storageOptions) || product.stockQuantity || 0,
+        sumVariantStocks(product.variantStocks) ||
+        sumStorageStocks(product.storageOptions) ||
+        product.stockQuantity ||
+        0,
       listingStatus: product.listingStatus,
       isFeatured: Boolean(product.isFeatured || false),
       featuredAt: product.featuredAt || null,
@@ -299,6 +525,7 @@ class ProductService {
         id: pc.color.id,
         name: pc.color.name,
         hexCode: pc.color.hexCode || null,
+        stockQuantity: pc.stockQuantity ?? 0,
       })),
       availableStorageOptions: sortStorageOptionsBySize(
         (product.storageOptions || []).map((ps) => ({
@@ -311,9 +538,10 @@ class ProductService {
               : parseFloat(product.basePrice),
         })),
       ),
-      availableRamOptions: (product.ramOptions || []).map((pr) => ({
-        id: pr.ramOption.id,
-        name: pr.ramOption.name,
+      availableVariantStocks: (product.variantStocks || []).map((vs) => ({
+        colorId: vs.colorId,
+        storageOptionId: vs.storageOptionId,
+        stockQuantity: vs.stockQuantity ?? 0,
       })),
     };
   }
@@ -333,7 +561,10 @@ class ProductService {
       title: product.title,
       basePrice: product.basePrice,
       stockQuantity:
-        sumStorageStocks(product.storageOptions) || product.stockQuantity || 0,
+        sumVariantStocks(product.variantStocks) ||
+        sumStorageStocks(product.storageOptions) ||
+        product.stockQuantity ||
+        0,
       listingStatus: product.listingStatus,
       thumbnail,
       category: product.category
@@ -353,7 +584,6 @@ class ProductService {
       createdAt: product.createdAt,
       colorIds: (product.colors || []).map((pc) => pc.colorId),
       storageOptionIds: (product.storageOptions || []).map((ps) => ps.storageOptionId),
-      ramOptionIds: (product.ramOptions || []).map((pr) => pr.ramOptionId),
     };
   }
 
@@ -377,7 +607,6 @@ class ProductService {
       includedItems,
       colorIds,
       storageOptionIds,
-      ramOptionIds,
     } = data;
 
     // Use introduction as description since the UI only provides Introduction
@@ -496,11 +725,10 @@ class ProductService {
 
     const colors = parseArray(colorIds);
     const storages = parseArray(storageOptionIds);
-    const rams = parseArray(ramOptionIds);
 
-    if (colors.length === 0 || storages.length === 0 || rams.length === 0) {
+    if (colors.length === 0 || storages.length === 0) {
       throw new AppError(
-        "At least one Color, Storage Option, and RAM Option must be selected.",
+        "At least one Color and Storage Option must be selected.",
         400,
       );
     }
@@ -545,8 +773,40 @@ class ProductService {
       storages,
       { fallbackStock: parsedStock, fallbackPrice: parsedPrice },
     );
+    const colorStockMap = this.#parseColorStocks(data.colorStocks, colors, {
+      fallbackStock: parsedStock,
+    });
+    const variantStockMap = this.#parseVariantStocks(
+      data.variantStocks,
+      colors,
+      storages,
+      { colorStockMap, storageVariantMap },
+    );
+    const { total: totalStock, byColor, byStorage } =
+      this.#aggregateVariantStockMap(variantStockMap);
+
+    // Prefer matrix totals on storage/color bridges when colors + storages exist
+    if (colors.length && storages.length) {
+      for (const storageId of storages) {
+        const current = storageVariantMap.get(storageId) || {
+          stockQuantity: 0,
+          price: parsedPrice,
+        };
+        storageVariantMap.set(storageId, {
+          ...current,
+          stockQuantity: byStorage.get(storageId) ?? 0,
+        });
+      }
+      for (const colorId of colors) {
+        colorStockMap.set(colorId, byColor.get(colorId) ?? 0);
+      }
+    }
+
     const storageVariantRows = this.#variantMapToRows(storageVariantMap);
-    const totalStock = sumStorageStocks(storageVariantRows);
+    const productTotalStock =
+      colors.length && storages.length
+        ? totalStock
+        : sumStorageStocks(storageVariantRows);
     const productBasePrice = minStoragePrice(storageVariantRows, parsedPrice);
 
     if (!storages.length && (parsedPrice == null || Number.isNaN(parsedPrice))) {
@@ -579,7 +839,7 @@ class ProductService {
           description,
           introduction,
           basePrice: productBasePrice,
-          stockQuantity: totalStock,
+          stockQuantity: productTotalStock,
           listingStatus: listingStatus || "INACTIVE",
           categoryId,
           seriesId,
@@ -596,7 +856,10 @@ class ProductService {
           includedItems: { create: productIncludedItems },
           // Create bridge records for options
           colors: {
-            create: colors.map((colorId) => ({ colorId })),
+            create: colors.map((colorId) => ({
+              colorId,
+              stockQuantity: colorStockMap.get(colorId) ?? 0,
+            })),
           },
           storageOptions: {
             create: storages.map((storageId) => {
@@ -611,9 +874,16 @@ class ProductService {
               };
             }),
           },
-          ramOptions: {
-            create: rams.map((ramId) => ({ ramOptionId: ramId })),
-          },
+          ...(colors.length && storages.length
+            ? {
+                variantStocks: {
+                  create: [...variantStockMap.entries()].map(([key, stockQuantity]) => {
+                    const [colorId, storageOptionId] = key.split('::');
+                    return { colorId, storageOptionId, stockQuantity };
+                  }),
+                },
+              }
+            : {}),
         },
         select: {
           id: true,
@@ -631,7 +901,7 @@ class ProductService {
    */
   async getAllProducts(query) {
     // Supported filters: categoryId, seriesId, deviceModelId, conditionId,
-    // colorId, storageOptionId, ramOptionId, priceMin, priceMax, search,
+    // colorId, storageOptionId, priceMin, priceMax, search,
     // listingStatus, isFeatured
     // Pagination: page, limit
     const {
@@ -641,7 +911,6 @@ class ProductService {
       conditionId,
       colorId,
       storageOptionId,
-      ramOptionId,
       priceMin,
       priceMax,
       search,
@@ -674,7 +943,6 @@ class ProductService {
     // Build relation filters for options
     if (colorId) where.colors = { some: { colorId } };
     if (storageOptionId) where.storageOptions = { some: { storageOptionId } };
-    if (ramOptionId) where.ramOptions = { some: { ramOptionId } };
 
     // When sortBy=featured, automatically filter to featured products only
     if (sortBy === 'featured') {
@@ -720,7 +988,6 @@ class ProductService {
           ...this.#activeStorageInclude,
           select: { storageOptionId: true, stockQuantity: true, price: true },
         },
-        ramOptions: { ...this.#activeRamInclude, select: { ramOptionId: true } },
       },
     }),
     ]);
@@ -750,7 +1017,8 @@ class ProductService {
         includedItems: { orderBy: { displayOrder: 'asc' } },
         colors: {
           ...this.#activeColorInclude,
-          include: {
+          select: {
+            stockQuantity: true,
             color: { select: { id: true, name: true, hexCode: true } },
           },
         },
@@ -760,10 +1028,11 @@ class ProductService {
             storageOption: { select: { id: true, name: true } },
           },
         },
-        ramOptions: {
-          ...this.#activeRamInclude,
-          include: {
-            ramOption: { select: { id: true, name: true } },
+        variantStocks: {
+          select: {
+            colorId: true,
+            storageOptionId: true,
+            stockQuantity: true,
           },
         },
       },
@@ -830,7 +1099,6 @@ class ProductService {
     let parsedIncludedItems = null;
     let parsedColors = null;
     let parsedStorages = null;
-    let parsedRams = null;
 
     if (data.faqs !== undefined) {
       parsedFaqs = parseArray(data.faqs);
@@ -862,7 +1130,6 @@ class ProductService {
 
     if (data.colorIds) parsedColors = parseArray(data.colorIds);
     if (data.storageOptionIds) parsedStorages = parseArray(data.storageOptionIds);
-    if (data.ramOptionIds) parsedRams = parseArray(data.ramOptionIds);
 
     let existingStorageIds = null;
     if (!parsedStorages) {
@@ -1050,14 +1317,61 @@ class ProductService {
       };
     }
 
-    if (parsedColors && parsedColors.length > 0) {
-      updateData.colors = {
-        deleteMany: {},
-        create: parsedColors.map((colorId) => ({ colorId })),
-      };
-    }
-
     let storageOptionsSync = null;
+    let colorOptionsSync = null;
+    let colorStockMapOnly = null;
+    let variantStocksSync = null;
+
+    const shouldSyncColorStocks =
+      data.colorStocks !== undefined || parsedColors;
+    const shouldSyncVariantStocks =
+      data.variantStocks !== undefined ||
+      parsedColors ||
+      parsedStorages ||
+      data.colorStocks !== undefined ||
+      data.storageStocks !== undefined;
+
+    if (parsedColors && parsedColors.length > 0) {
+      const colorStocksProvided =
+        data.colorStocks !== undefined &&
+        data.colorStocks !== null &&
+        data.colorStocks !== '';
+      const colorStockMap = this.#parseColorStocks(
+        data.colorStocks,
+        parsedColors,
+        { fallbackStock: 0 },
+      );
+
+      // When only colorIds change without colorStocks, keep existing per-color stock.
+      if (!colorStocksProvided) {
+        const existingColors = await prisma.productColor.findMany({
+          where: { productId: id },
+          includeDeleted: true,
+          select: { colorId: true, stockQuantity: true },
+        });
+        for (const row of existingColors) {
+          if (parsedColors.includes(row.colorId)) {
+            colorStockMap.set(row.colorId, row.stockQuantity ?? 0);
+          }
+        }
+      }
+
+      colorOptionsSync = {
+        colorIds: parsedColors,
+        stockMap: colorStockMap,
+      };
+    } else if (shouldSyncColorStocks && data.colorStocks !== undefined) {
+      const existingColors = await prisma.productColor.findMany({
+        where: { productId: id },
+        select: { colorId: true },
+      });
+      const existingColorIds = existingColors.map((row) => row.colorId);
+      colorStockMapOnly = this.#parseColorStocks(
+        data.colorStocks,
+        existingColorIds,
+        { fallbackStock: 0 },
+      );
+    }
 
     if (parsedStorages) {
       const variantMap =
@@ -1089,11 +1403,92 @@ class ProductService {
       updateData.stockQuantity = parseInt(data.stockQuantity, 10) || 0;
     }
 
-    if (parsedRams && parsedRams.length > 0) {
-      updateData.ramOptions = {
-        deleteMany: {},
-        create: parsedRams.map((ramId) => ({ ramOptionId: ramId })),
-      };
+    if (shouldSyncVariantStocks) {
+      let colorIdsForVariants =
+        colorOptionsSync?.colorIds ||
+        (colorStockMapOnly ? [...colorStockMapOnly.keys()] : null);
+      if (!colorIdsForVariants) {
+        const existingColors = await prisma.productColor.findMany({
+          where: { productId: id },
+          select: { colorId: true },
+        });
+        colorIdsForVariants = existingColors.map((row) => row.colorId);
+      }
+
+      const storageIdsForVariants =
+        storageOptionsSync?.storageIds || storageIdsForStock;
+
+      if (colorIdsForVariants.length && storageIdsForVariants.length) {
+        let seedColorMap = colorOptionsSync?.stockMap || colorStockMapOnly;
+        let seedStorageMap =
+          storageOptionsSync?.variantMap || storageVariantMap;
+
+        // Preserve existing matrix cells when variantStocks payload is omitted
+        const variantStocksProvided =
+          data.variantStocks !== undefined &&
+          data.variantStocks !== null &&
+          data.variantStocks !== '';
+
+        const stockMap = this.#parseVariantStocks(
+          data.variantStocks,
+          colorIdsForVariants,
+          storageIdsForVariants,
+          {
+            colorStockMap: seedColorMap,
+            storageVariantMap: seedStorageMap,
+          },
+        );
+
+        if (!variantStocksProvided) {
+          const existingVariants = await prisma.productVariantStock.findMany({
+            where: { productId: id },
+            select: {
+              colorId: true,
+              storageOptionId: true,
+              stockQuantity: true,
+            },
+          });
+          for (const row of existingVariants) {
+            const key = variantStockKey(row.colorId, row.storageOptionId);
+            if (
+              colorIdsForVariants.includes(row.colorId) &&
+              storageIdsForVariants.includes(row.storageOptionId)
+            ) {
+              stockMap.set(key, row.stockQuantity ?? 0);
+            }
+          }
+        }
+
+        const { total, byColor, byStorage } =
+          this.#aggregateVariantStockMap(stockMap);
+
+        // Apply aggregated totals onto color/storage sync maps
+        if (colorOptionsSync) {
+          for (const colorId of colorOptionsSync.colorIds) {
+            colorOptionsSync.stockMap.set(colorId, byColor.get(colorId) ?? 0);
+          }
+        }
+        if (storageOptionsSync) {
+          for (const storageId of storageOptionsSync.storageIds) {
+            const current =
+              storageOptionsSync.variantMap.get(storageId) || {
+                stockQuantity: 0,
+                price: null,
+              };
+            storageOptionsSync.variantMap.set(storageId, {
+              ...current,
+              stockQuantity: byStorage.get(storageId) ?? 0,
+            });
+          }
+        }
+
+        updateData.stockQuantity = total;
+        variantStocksSync = {
+          colorIds: colorIdsForVariants,
+          storageIds: storageIdsForVariants,
+          stockMap,
+        };
+      }
     }
 
     const hasGalleryUpdates =
@@ -1118,12 +1513,31 @@ class ProductService {
     }
 
     const updatedProduct = await prisma.$transaction(async (tx) => {
+      if (colorOptionsSync) {
+        await this.#syncProductColorOptions(
+          tx,
+          id,
+          colorOptionsSync.colorIds,
+          colorOptionsSync.stockMap,
+        );
+      }
+
       if (storageOptionsSync) {
         await this.#syncProductStorageOptions(
           tx,
           id,
           storageOptionsSync.storageIds,
           storageOptionsSync.variantMap,
+        );
+      }
+
+      if (variantStocksSync) {
+        await this.#syncProductVariantStocks(
+          tx,
+          id,
+          variantStocksSync.colorIds,
+          variantStocksSync.storageIds,
+          variantStocksSync.stockMap,
         );
       }
 
@@ -1174,9 +1588,50 @@ class ProductService {
             tx.productStorageOption.updateMany({
               where: { productId: id, storageOptionId },
               data: {
-                stockQuantity: variant.stockQuantity ?? 0,
+                ...(variantStocksSync
+                  ? {}
+                  : { stockQuantity: variant.stockQuantity ?? 0 }),
                 ...(variant.price != null ? { price: variant.price } : {}),
               },
+            }),
+          ),
+        );
+      }
+
+      if (colorStockMapOnly && colorStockMapOnly.size > 0 && !variantStocksSync) {
+        await Promise.all(
+          [...colorStockMapOnly.entries()].map(([colorId, stockQuantity]) =>
+            tx.productColor.updateMany({
+              where: { productId: id, colorId },
+              data: { stockQuantity },
+            }),
+          ),
+        );
+      }
+
+      // When matrix updated without full color/storage sync, refresh aggregates
+      if (variantStocksSync && !colorOptionsSync) {
+        const { byColor } = this.#aggregateVariantStockMap(
+          variantStocksSync.stockMap,
+        );
+        await Promise.all(
+          [...byColor.entries()].map(([colorId, stockQuantity]) =>
+            tx.productColor.updateMany({
+              where: { productId: id, colorId },
+              data: { stockQuantity },
+            }),
+          ),
+        );
+      }
+      if (variantStocksSync && !storageOptionsSync) {
+        const { byStorage } = this.#aggregateVariantStockMap(
+          variantStocksSync.stockMap,
+        );
+        await Promise.all(
+          [...byStorage.entries()].map(([storageOptionId, stockQuantity]) =>
+            tx.productStorageOption.updateMany({
+              where: { productId: id, storageOptionId },
+              data: { stockQuantity },
             }),
           ),
         );
