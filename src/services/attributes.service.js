@@ -293,22 +293,40 @@ class AttributesService {
     this.#requireString(deviceModelId, 'DeviceModel ID');
     this.#requireString(storageOptionId, 'Storage option ID');
     const amt = this.#parsePrice(price);
-    
+
+    const select = {
+      id: true,
+      conditionId: true,
+      deviceModelId: true,
+      storageOptionId: true,
+      price: true,
+      createdAt: true,
+      updatedAt: true,
+      condition: { select: { id: true, name: true } },
+      deviceModel: { select: { id: true, name: true, seriesId: true } },
+      storageOption: { select: { id: true, name: true } },
+    };
+
+    // Soft-deleted rows still occupy the unique (condition, model, storage) key.
+    // Restore + update price instead of failing create.
+    const deletedRecord = await this.#checkUniqueAndGetDeleted(
+      'conditionModelPrice',
+      { conditionId, deviceModelId, storageOptionId },
+      'Price already set for this condition, model, and storage.',
+    );
+
     try {
+      if (deletedRecord) {
+        return await prisma.conditionModelPrice.update({
+          where: { id: deletedRecord.id },
+          data: { price: amt, isDeleted: false, deletedAt: null },
+          select,
+        });
+      }
+
       return await prisma.conditionModelPrice.create({
         data: { conditionId, deviceModelId, storageOptionId, price: amt },
-        select: {
-          id: true,
-          conditionId: true,
-          deviceModelId: true,
-          storageOptionId: true,
-          price: true,
-          createdAt: true,
-          updatedAt: true,
-          condition: { select: { id: true, name: true } },
-          deviceModel: { select: { id: true, name: true, seriesId: true } },
-          storageOption: { select: { id: true, name: true } },
-        },
+        select,
       });
     } catch (err) {
       if (err?.code === 'P2002') {
