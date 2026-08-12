@@ -203,6 +203,37 @@ class SellController {
     });
   });
 
+  // Public: track sell requests by email
+  trackByEmail = asyncHandler(async (req, res) => {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email is required." });
+    }
+
+    const requests = await sellService.trackByEmail(email);
+
+    const statusLabel = {
+      SUBMITTED: "Submitted",
+      RECEIVED: "Received",
+      INSPECTION: "Under Inspection",
+      OFFER_MADE: "Offer Made",
+      PAID: "Paid",
+      REJECTED: "Rejected",
+    };
+
+    const transformed = requests.map((r) => ({
+      stringId: r.stringId,
+      deviceModelName: r.deviceModel?.name || null,
+      storageOptionName: r.storageOption?.name || null,
+      conditionName: r.condition?.name || null,
+      baseOfferPrice: r.baseOfferPrice,
+      status: statusLabel[r.status] || r.status,
+      createdAt: r.createdAt,
+    }));
+
+    res.status(200).json({ success: true, data: transformed });
+  });
+
   // Admin: list sell requests with pagination and filters
   adminGetAll = asyncHandler(async (req, res) => {
     const { page = 1, limit = 20, status, search, deviceModelId } = req.query;
@@ -220,6 +251,7 @@ class SellController {
       const statusMap = this.mapStatusToAdmin(r.status);
       return {
         id: r.id,
+        stringId: r.stringId,
         fullName,
         email: r.email,
         phone: r.phone,

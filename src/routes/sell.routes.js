@@ -11,6 +11,7 @@ router.get("/conditions", ctrl.getAllConditions);
 router.get("/storage-options", ctrl.getAllStorageOptions);
 router.get("/price", ctrl.getPrice);
 router.post("/finalize", ctrl.finalizeSale);
+router.get("/track", ctrl.trackByEmail);
 
 // Real-time sell activity stream (Server-Sent Events)
 // Must be declared before any '/:id' routes so Express doesn't swallow it.

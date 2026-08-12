@@ -90,6 +90,22 @@ class SellService {
     return record;
   }
 
+  async trackByEmail(email) {
+    const requests = await prisma.sellRequest.findMany({
+      where: {
+        email: { equals: email, mode: "insensitive" },
+        isDeleted: false,
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        condition: { select: { name: true } },
+        deviceModel: { select: { name: true } },
+        storageOption: { select: { id: true, name: true } },
+      },
+    });
+    return requests;
+  }
+
   async getAllSellRequests({
     page = 1,
     limit = 20,
