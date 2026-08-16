@@ -5,6 +5,7 @@ import attributesController from '../controllers/attributes.controller.js';
 import promoController from '../controllers/promo.controller.js';
 import { authenticate, adminGuard, optionalAuthenticate } from '../middleware/auth.middleware.js';
 import upload from '../middleware/upload.middleware.js';
+import normalizeProductImages from '../middleware/normalize-product-images.middleware.js';
 
 // Public product routes
 const publicRouter = Router();
@@ -19,10 +20,20 @@ publicRouter.post('/checkout/cancel', paymentsController.cancelUnpaidCheckout);
 // Admin product routes
 const adminRouter = Router();
 adminRouter.use(authenticate, adminGuard);
-adminRouter.post('/', upload.array('images', 20), productController.createProduct);
+adminRouter.post(
+  '/',
+  upload.array('images', 20),
+  normalizeProductImages,
+  productController.createProduct,
+);
 adminRouter.get('/', productController.getAllProducts);
 adminRouter.get('/:id', productController.getProductById);
-adminRouter.patch('/:id', upload.array('images', 20), productController.updateProduct);
+adminRouter.patch(
+  '/:id',
+  upload.array('images', 20),
+  normalizeProductImages,
+  productController.updateProduct,
+);
 adminRouter.delete('/:id/gallery/:imageId', productController.deleteGalleryImage);
 adminRouter.delete('/:id', productController.deleteProduct);
 adminRouter.patch('/:id/feature', productController.changeFeatured);
