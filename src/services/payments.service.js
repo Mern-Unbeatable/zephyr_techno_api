@@ -3,13 +3,112 @@ import env from '../config/env.js';
 import orderService from './orders.service.js';
 import prisma from '../utils/prisma.js';
 
+const PLACEHOLDER_SHIPPING = {
+  fullName: 'To be confirmed',
+  phone: null,
+  street: 'To be confirmed',
+  city: 'To be confirmed',
+  zipCode: 'TBC',
+  country: 'United Kingdom',
+};
+
+function mapCountry(codeOrName) {
+  if (!codeOrName) return 'United Kingdom';
+  if (codeOrName === 'GB' || codeOrName === 'UK') return 'United Kingdom';
+  return codeOrName;
+}
+
+function mapStripeCollectedAddress(session) {
+  const shipping = session.shipping_details || session.shipping || {};
+  const addr = shipping.address || session.collected_information?.shipping_details?.address || {};
+  const billing = session.customer_details?.address || {};
+  const use = addr.line1 ? addr : billing;
+  const name =
+    shipping.name ||
+    session.collected_information?.shipping_details?.name ||
+    session.customer_details?.name;
+  const line1 = use.line1;
+  const line2 = use.line2;
+  const street = [line1, line2].filter(Boolean).join(', ');
+
+  if (!name && !street) return null;
+
+  return {
+    email: session.customer_details?.email || session.customer_email || null,
+    fullName: name || 'Customer',
+    phone: session.customer_details?.phone || shipping.phone || null,
+    street: street || PLACEHOLDER_SHIPPING.street,
+    city: use.city || PLACEHOLDER_SHIPPING.city,
+    state: use.state || null,
+    zipCode: use.postal_code || PLACEHOLDER_SHIPPING.zipCode,
+    country: mapCountry(use.country),
+  };
+}
+
 class PaymentsService {
   constructor() {
     this.stripeSecret = process.env.STRIPE_SECRET || null;
     if (this.stripeSecret) this.stripe = new Stripe(this.stripeSecret, { apiVersion: '2022-11-15' });
   }
 
-  async createCheckoutSession(userId, guestSessionId, guestEmail, shippingAddress, cartItemIds = null, shippingMethod = null, shippingCost = 0, promoCode = null, directProduct = null) {
+  async #draftShippingAddress(userId, shippingAddress, collectAddressOnStripe) {
+    if (!collectAddressOnStripe) return shippingAddress;
+    if (shippingAddress?.street && shippingAddress?.city && shippingAddress?.zipCode) {
+      return shippingAddress;
+    }
+
+    if (userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          firstName: true,
+          lastName: true,
+          phone: true,
+          userAddresses: {
+            where: { isDeleted: false },
+            take: 1,
+            orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
+            select: {
+              fullName: true,
+              phone: true,
+              street: true,
+              city: true,
+              state: true,
+              zipCode: true,
+              country: true,
+            },
+          },
+        },
+      });
+      const addr = user?.userAddresses?.[0];
+      if (addr?.street && addr?.city && addr?.zipCode) {
+        return {
+          fullName: addr.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+          phone: addr.phone || user.phone || null,
+          street: addr.street,
+          city: addr.city,
+          state: addr.state || null,
+          zipCode: addr.zipCode,
+          country: addr.country || 'United Kingdom',
+        };
+      }
+    }
+
+    return PLACEHOLDER_SHIPPING;
+  }
+
+  async createCheckoutSession(
+    userId,
+    guestSessionId,
+    guestEmail,
+    shippingAddress,
+    cartItemIds = null,
+    shippingMethod = null,
+    shippingCost = 0,
+    promoCode = null,
+    directProduct = null,
+    collectAddressOnStripe = false,
+  ) {
     if (!this.stripe) throw new Error('Stripe not configured. Set STRIPE_SECRET env var.');
 
     // Get user email for Stripe checkout - either from authenticated user or guest
@@ -22,6 +121,12 @@ class PaymentsService {
       userEmail = user?.email || guestEmail;
     }
 
+    const resolvedAddress = await this.#draftShippingAddress(
+      userId,
+      shippingAddress,
+      collectAddressOnStripe,
+    );
+
     // Clear previous unpaid drafts so retries don't leave ghost orders in admin
     await orderService.abandonOpenUnpaidCheckouts({
       userId,
@@ -30,7 +135,7 @@ class PaymentsService {
 
     // Create order draft first (PENDING / unpaid) — confirmed only after Stripe payment
     const order = await orderService.createOrder(userId, guestSessionId, guestEmail, { 
-      shippingAddress, 
+      shippingAddress: resolvedAddress, 
       paymentMethod: 'STRIPE', 
       cartItemIds,
       shippingMethod,
@@ -61,17 +166,26 @@ class PaymentsService {
     const successUrl = `${successBase}${successBase.includes('?') ? '&' : '?'}orderId=${order.id}`;
     const cancelUrl = `${cancelBase}${cancelBase.includes('?') ? '&' : '?'}orderId=${order.id}`;
 
-    // Address/contact already collected on website checkout — Stripe is payment-only.
-    const session = await this.stripe.checkout.sessions.create({
+    const sessionConfig = {
       payment_method_types: ['card'],
       mode: 'payment',
       customer_email: userEmail || undefined,
-      billing_address_collection: 'auto',
+      billing_address_collection: collectAddressOnStripe ? 'required' : 'auto',
       line_items,
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: { orderId: order.id },
-    });
+      metadata: {
+        orderId: order.id,
+        collectAddressOnStripe: collectAddressOnStripe ? 'true' : 'false',
+      },
+    };
+
+    if (collectAddressOnStripe) {
+      sessionConfig.shipping_address_collection = { allowed_countries: ['GB'] };
+      sessionConfig.phone_number_collection = { enabled: true };
+    }
+
+    const session = await this.stripe.checkout.sessions.create(sessionConfig);
 
     // Persist Stripe session id for cancel / reconcile
     await prisma.order.update({
@@ -104,8 +218,13 @@ class PaymentsService {
 
     if (!orderId) throw new Error('Order id missing from session metadata');
 
-    // Keep website checkout address; Stripe is payment-only in this flow.
-    const updatedOrder = await orderService.confirmPayment(orderId, 'PROCESSING', 'PAID');
+    const stripeShippingAddress = mapStripeCollectedAddress(session);
+    const updatedOrder = await orderService.confirmPayment(
+      orderId,
+      'PROCESSING',
+      'PAID',
+      stripeShippingAddress,
+    );
 
     return updatedOrder;
   }

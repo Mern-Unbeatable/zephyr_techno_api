@@ -613,7 +613,7 @@ class OrderService {
       where: { id: orderId },
       include: {
         address: {
-          select: { fullName: true, phone: true, street: true, city: true, state: true, zipCode: true, country: true },
+          select: { id: true, fullName: true, phone: true, street: true, city: true, state: true, zipCode: true, country: true },
         },
         user: {
           select: {
@@ -738,6 +738,13 @@ class OrderService {
             zipCode: stripeShippingAddress.zipCode || existing.address.zipCode,
             country: stripeShippingAddress.country || existing.address.country,
           },
+        });
+      }
+
+      if (!existing.userId && stripeShippingAddress?.email) {
+        await tx.order.update({
+          where: { id: orderId },
+          data: { guestEmail: stripeShippingAddress.email },
         });
       }
 

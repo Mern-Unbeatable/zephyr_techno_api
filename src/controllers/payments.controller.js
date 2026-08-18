@@ -20,16 +20,18 @@ class PaymentsController {
       });
     }
 
-    // Guest checkout requires email (collected on website checkout page)
-    if (!userId && !guestEmail) {
+    const { shippingAddress, cartItemIds, shippingMethod, shippingCost, promoCode, productId, colorId, storageOptionId, quantity, collectAddressOnStripe } = req.body;
+    const collectOnStripe = Boolean(collectAddressOnStripe);
+
+    // Guest checkout requires email unless Stripe will collect contact + address
+    if (!userId && !guestEmail && !collectOnStripe) {
       return res.status(400).json({ 
         success: false, 
         message: 'Guest checkout requires guestEmail' 
       });
     }
 
-    const { shippingAddress, cartItemIds, shippingMethod, shippingCost, promoCode, productId, colorId, storageOptionId, quantity } = req.body;
-    if (!shippingAddress) {
+    if (!shippingAddress && !collectOnStripe) {
       return res.status(400).json({ success: false, message: 'shippingAddress required' });
     }
 
@@ -48,12 +50,13 @@ class PaymentsController {
       userId,
       guestSessionId,
       guestEmail,
-      shippingAddress,
+      shippingAddress || null,
       cartItemIds,
       shippingMethod,
       shippingCost,
       promoCode,
       directProduct,
+      collectOnStripe,
     );
     res.status(201).json({ success: true, data: { orderId: order.id, checkoutUrl: sessionUrl, sessionId } });
   });
