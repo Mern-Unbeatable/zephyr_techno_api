@@ -2,6 +2,30 @@ import prisma from '../utils/prisma.js';
 import AppError from '../utils/app-error.js';
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
+import fs from 'fs/promises';
+import { buildImageUrl } from '../utils/url.js';
+
+const USER_PUBLIC_SELECT = {
+  id: true,
+  email: true,
+  firstName: true,
+  lastName: true,
+  phone: true,
+  avatar: true,
+  role: true,
+  status: true,
+  isEmailVerified: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
+const formatUser = (user) => {
+  if (!user) return user;
+  return {
+    ...user,
+    avatar: user.avatar ? buildImageUrl(user.avatar) : null,
+  };
+};
 
 class UserService {
   async getAllUsers(query = {}, options = { onlyCustomers: true }) {
@@ -35,6 +59,7 @@ class UserService {
           firstName: true,
           lastName: true,
           phone: true,
+          avatar: true,
           role: true,
           status: true,
           isEmailVerified: true,
@@ -46,23 +71,14 @@ class UserService {
       }),
     ]);
 
-    return { total, data: users };
+    return { total, data: users.map(formatUser) };
   }
 
   async getUserById(id) {
     const user = await prisma.user.findUnique({
       where: { id },
       select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        role: true,
-        status: true,
-        isEmailVerified: true,
-        createdAt: true,
-        updatedAt: true,
+        ...USER_PUBLIC_SELECT,
         userAddresses: {
           where: { isDeleted: false },
           select: {
@@ -82,23 +98,14 @@ class UserService {
       },
     });
     if (!user) throw new AppError('User not found', 404);
-    return user;
+    return formatUser(user);
   }
 
   async getProfile(userId) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        role: true,
-        status: true,
-        isEmailVerified: true,
-        createdAt: true,
-        updatedAt: true,
+        ...USER_PUBLIC_SELECT,
         userAddresses: {
           where: { isDeleted: false },
           select: {
@@ -116,7 +123,7 @@ class UserService {
       },
     });
     if (!user) throw new AppError('User not found', 404);
-    return user;
+    return formatUser(user);
   }
 
   async changePassword(userId, currentPassword, newPassword) {
@@ -126,10 +133,21 @@ class UserService {
 
   async updateUserProfile(userId, data) {
     const updateData = {};
-    const allowed = ['firstName', 'lastName', 'phone'];
+    const allowed = ['firstName', 'lastName', 'phone', 'avatar'];
     
     // Update personal info fields
     for (const k of allowed) if (data[k] !== undefined) updateData[k] = data[k];
+
+    if (data.avatar) {
+      const existing = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { avatar: true },
+      });
+      const oldAvatar = existing?.avatar;
+      if (oldAvatar && oldAvatar !== data.avatar && oldAvatar.startsWith('uploads')) {
+        await fs.unlink(oldAvatar).catch(() => {});
+      }
+    }
 
     // Handle address updates if provided
     if (data.addresses && Array.isArray(data.addresses) && data.addresses.length > 0) {
@@ -208,7 +226,7 @@ class UserService {
       // Fetch updated user
       const updated = await prisma.$queryRaw`
         SELECT 
-          u.id, u.email, u."firstName", u."lastName", u.phone, 
+          u.id, u.email, u."firstName", u."lastName", u.phone, u.avatar,
           u.role, u.status, u."isEmailVerified", u."createdAt", u."updatedAt"
         FROM "User" u
         WHERE u.id = ${userId}
@@ -222,10 +240,10 @@ class UserService {
         userId
       );
 
-      return {
+      return formatUser({
         ...user,
         userAddresses: addresses,
-      };
+      });
     } catch (err) {
       if (err.code === 'P2025') throw new AppError('User not found', 404);
       throw err;

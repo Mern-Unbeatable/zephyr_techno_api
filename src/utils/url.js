@@ -15,11 +15,10 @@ export const buildImageUrl = (filePath) => {
   // Normalize path to use forward slashes
   const normalizedPath = filePath.replace(/\\/g, '/').replace(/^\/+/, '');
 
-  const baseUrl =
-    process.env.LIVE_URL ||
-    (env.nodeEnv === 'production'
-      ? 'https://api.zephyrtechnology.co.uk'
-      : `http://localhost:${env.port}`);
+  const isProd = env.nodeEnv === 'production';
+  const baseUrl = isProd
+    ? (process.env.LIVE_URL || 'https://api.zephyrtechnology.co.uk')
+    : `http://localhost:${env.port}`;
 
   return `${String(baseUrl).replace(/\/$/, '')}/${normalizedPath}`;
 };

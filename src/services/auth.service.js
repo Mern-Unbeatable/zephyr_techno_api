@@ -6,6 +6,7 @@ import Mailer from '../utils/mailer.js';
 import AppError from '../utils/app-error.js';
 import env from '../config/env.js';
 import cartService from './cart.service.js';
+import { buildImageUrl } from '../utils/url.js';
 
 /**
  * Reusable Prisma select shape that exactly matches #sanitizeUser output.
@@ -17,6 +18,7 @@ const SANITIZE_SELECT = {
   firstName: true,
   lastName: true,
   phone: true,
+  avatar: true,
   role: true,
   isEmailVerified: true,
   emailVerifiedAt: true,
@@ -441,6 +443,7 @@ class AuthService {
       firstName: user.firstName,
       lastName: user.lastName,
       phone: user.phone,
+      avatar: user.avatar ? buildImageUrl(user.avatar) : null,
       role: user.role,
       isEmailVerified: user.isEmailVerified,
       emailVerifiedAt: user.emailVerifiedAt,

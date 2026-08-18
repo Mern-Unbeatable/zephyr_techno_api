@@ -89,6 +89,7 @@ model User {
   firstName                     String
   lastName                      String
   phone                         String?
+  avatar                        String?
   isEmailVerified               Boolean    @default(false)
   emailVerifiedAt               DateTime?
   emailVerificationOtpHash      String?

@@ -1,12 +1,20 @@
 import { Router } from 'express';
 import usersController from '../controllers/users.controller.js';
 import { authenticate, adminGuard } from '../middleware/auth.middleware.js';
+import upload from '../middleware/upload.middleware.js';
+import normalizeAvatar from '../middleware/normalize-avatar.middleware.js';
 
 // Public routes (exported as default)
 const publicRouter = Router();
 publicRouter.get('/', (req, res) => res.status(200).json({ message: 'User routes are working' }));
 publicRouter.get('/me', authenticate, usersController.getProfile);
-publicRouter.put('/me', authenticate, usersController.updateProfile);
+publicRouter.put(
+  '/me',
+  authenticate,
+  upload.single('avatar'),
+  normalizeAvatar,
+  usersController.updateProfile,
+);
 
 // Admin routes (exported as named `adminRouter`)
 const adminRouter = Router();

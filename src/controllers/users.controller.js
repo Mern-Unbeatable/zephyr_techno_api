@@ -46,17 +46,29 @@ class UsersController {
 
   /**
    * PUT /api/users/me
-   * Update current authenticated user's profile
+   * Update current authenticated user's profile (JSON or multipart with `avatar`)
    */
   updateProfile = asyncHandler(async (req, res) => {
     const userId = req.user.id;
-    const { firstName, lastName, phone, addresses } = req.body;
-    
+    const { firstName, lastName, phone } = req.body;
+    let { addresses } = req.body;
+
+    if (typeof addresses === 'string') {
+      try {
+        addresses = JSON.parse(addresses);
+      } catch {
+        return res.status(400).json({ success: false, message: 'Invalid addresses payload.' });
+      }
+    }
+
     const updateData = {};
     if (firstName !== undefined) updateData.firstName = firstName;
     if (lastName !== undefined) updateData.lastName = lastName;
     if (phone !== undefined) updateData.phone = phone;
     if (addresses !== undefined) updateData.addresses = addresses;
+    if (req.file?.path) {
+      updateData.avatar = req.file.path.replace(/\\/g, '/');
+    }
 
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ success: false, message: 'No fields to update provided' });
