@@ -19,12 +19,23 @@ function mapCountry(codeOrName) {
 }
 
 function getStripePublishableKey() {
-  return (
-    process.env.STRIPE_PUBLISHABLE_KEY ||
-    process.env.STRIPE_PUBLISHABLE ||
-    Object.entries(process.env).find(([key]) => key.startsWith('STRIPE_PUBLISHABLE_'))?.[1] ||
-    null
+  if (process.env.STRIPE_PUBLISHABLE_KEY) return process.env.STRIPE_PUBLISHABLE_KEY;
+  if (process.env.STRIPE_PUBLISHABLE) return process.env.STRIPE_PUBLISHABLE;
+
+  const typoKey = Object.keys(process.env).find(
+    (key) => key.startsWith('STRIPE_PUBLISHABLE_pk_'),
   );
+  if (typoKey) {
+    const value = process.env[typoKey];
+    if (value && value.startsWith('pk_')) return value;
+    const fromName = typoKey.replace(/^STRIPE_PUBLISHABLE_/, '');
+    if (fromName.startsWith('pk_')) return fromName;
+  }
+
+  const entry = Object.entries(process.env).find(
+    ([key, value]) => key.startsWith('STRIPE_PUBLISHABLE_') && value,
+  );
+  return entry?.[1] || null;
 }
 
 function mapPaymentIntentShipping(paymentIntent) {
@@ -312,7 +323,8 @@ class PaymentsService {
     const paymentIntent = await this.stripe.paymentIntents.create({
       amount: amountPence,
       currency: 'gbp',
-      automatic_payment_methods: { enabled: true },
+      payment_method_types: ['card'],
+      receipt_email: guestEmail || undefined,
       metadata: { orderId: order.id },
     });
 

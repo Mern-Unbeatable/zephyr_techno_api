@@ -7,18 +7,18 @@ import { authenticate, adminGuard, optionalAuthenticate } from '../middleware/au
 import upload from '../middleware/upload.middleware.js';
 import normalizeProductImages from '../middleware/normalize-product-images.middleware.js';
 
-// Public product routes
+// Public product routes — specific paths MUST come before /:id
 const publicRouter = Router();
 publicRouter.get('/attributes', attributesController.getPublicProductAttributes);
-publicRouter.get('/:id', productController.getProductById);
-publicRouter.get('/', productController.getAllProducts);
-publicRouter.post('/promo/validate', optionalAuthenticate, promoController.validatePromoCode);
 publicRouter.get('/stripe-config', paymentsController.getStripeConfig);
+publicRouter.post('/promo/validate', optionalAuthenticate, promoController.validatePromoCode);
 publicRouter.post('/checkout', optionalAuthenticate, paymentsController.createCheckoutSession);
 publicRouter.post('/checkout/confirm', paymentsController.confirmCheckoutSession);
 publicRouter.post('/checkout/cancel', paymentsController.cancelUnpaidCheckout);
 publicRouter.post('/express-checkout/intent', optionalAuthenticate, paymentsController.createExpressPaymentIntent);
 publicRouter.post('/express-checkout/confirm', paymentsController.confirmExpressPayment);
+publicRouter.get('/:id', productController.getProductById);
+publicRouter.get('/', productController.getAllProducts);
 
 // Admin product routes
 const adminRouter = Router();
