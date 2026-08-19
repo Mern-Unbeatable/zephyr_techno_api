@@ -286,6 +286,53 @@ class PaymentsService {
     return getStripePublishableKey();
   }
 
+  #frontendHostnames() {
+    const urls = [
+      process.env.FRONTEND_URL,
+      'https://zephyrtechnology.co.uk',
+      'https://www.zephyrtechnology.co.uk',
+    ].filter(Boolean);
+
+    return [...new Set(urls.map((url) => {
+      try {
+        return new URL(url).hostname;
+      } catch {
+        return null;
+      }
+    }).filter(Boolean))];
+  }
+
+  /**
+   * Register frontend domains so Apple Pay can open as a wallet sheet
+   * on-site (Express Checkout Element), not Stripe Checkout redirect.
+   */
+  async registerPaymentMethodDomains() {
+    if (!this.stripeSecret) return;
+
+    const domains = this.#frontendHostnames();
+    for (const domain_name of domains) {
+      try {
+        const res = await fetch('https://api.stripe.com/v1/payment_method_domains', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.stripeSecret}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Stripe-Version': '2024-11-20.acacia',
+          },
+          body: new URLSearchParams({ domain_name }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          console.warn(`[Stripe] Domain ${domain_name}:`, data.error?.message || data);
+          continue;
+        }
+        console.log(`[Stripe] Apple Pay domain ready: ${domain_name} (${data.apple_pay?.status || 'registered'})`);
+      } catch (err) {
+        console.warn(`[Stripe] Could not register domain ${domain_name}:`, err.message);
+      }
+    }
+  }
+
   /**
    * Create a Payment Intent for on-page Express Checkout (Apple Pay / Google Pay).
    */
