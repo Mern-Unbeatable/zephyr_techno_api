@@ -370,7 +370,7 @@ class PaymentsService {
     const paymentIntent = await this.stripe.paymentIntents.create({
       amount: amountPence,
       currency: 'gbp',
-      payment_method_types: ['card'],
+      automatic_payment_methods: { enabled: true },
       receipt_email: guestEmail || undefined,
       metadata: { orderId: order.id },
     });
