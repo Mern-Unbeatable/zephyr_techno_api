@@ -18,6 +18,41 @@ function mapCountry(codeOrName) {
   return codeOrName;
 }
 
+function getStripePublishableKey() {
+  return (
+    process.env.STRIPE_PUBLISHABLE_KEY ||
+    process.env.STRIPE_PUBLISHABLE ||
+    Object.entries(process.env).find(([key]) => key.startsWith('STRIPE_PUBLISHABLE_'))?.[1] ||
+    null
+  );
+}
+
+function mapPaymentIntentShipping(paymentIntent) {
+  const shipping = paymentIntent.shipping || {};
+  const addr = shipping.address || {};
+  const billing =
+    paymentIntent.latest_charge?.billing_details ||
+    paymentIntent.charges?.data?.[0]?.billing_details ||
+    {};
+
+  const line1 = addr.line1;
+  const line2 = addr.line2;
+  const street = [line1, line2].filter(Boolean).join(', ');
+
+  if (!shipping.name && !street && !billing.name) return null;
+
+  return {
+    email: billing.email || paymentIntent.receipt_email || null,
+    fullName: shipping.name || billing.name || 'Customer',
+    phone: billing.phone || null,
+    street: street || PLACEHOLDER_SHIPPING.street,
+    city: addr.city || PLACEHOLDER_SHIPPING.city,
+    state: addr.state || null,
+    zipCode: addr.postal_code || PLACEHOLDER_SHIPPING.zipCode,
+    country: mapCountry(addr.country),
+  };
+}
+
 function mapStripeCollectedAddress(session) {
   const shipping = session.shipping_details || session.shipping || {};
   const addr = shipping.address || session.collected_information?.shipping_details?.address || {};
@@ -234,6 +269,97 @@ class PaymentsService {
    */
   async cancelUnpaidCheckout(orderId) {
     return orderService.abandonUnpaidOrder(orderId, 'Customer cancelled Stripe checkout');
+  }
+
+  getPublishableKey() {
+    return getStripePublishableKey();
+  }
+
+  /**
+   * Create a Payment Intent for on-page Express Checkout (Apple Pay / Google Pay).
+   */
+  async createExpressPaymentIntent(
+    userId,
+    guestSessionId,
+    guestEmail,
+    directProduct,
+    shippingMethod = 'Standard Delivery',
+    shippingCost = 0,
+  ) {
+    if (!this.stripe) throw new Error('Stripe not configured. Set STRIPE_SECRET env var.');
+
+    if (!directProduct?.productId) {
+      throw new Error('directProduct with productId is required');
+    }
+
+    await orderService.abandonOpenUnpaidCheckouts({
+      userId,
+      guestEmail: userId ? null : guestEmail,
+    });
+
+    const order = await orderService.createOrder(userId, guestSessionId, guestEmail, {
+      shippingAddress: PLACEHOLDER_SHIPPING,
+      paymentMethod: 'STRIPE',
+      shippingMethod,
+      shippingCost: parseFloat(shippingCost) || 0,
+      promoCode: null,
+      directProduct,
+    });
+
+    const amountPence = Math.round(order.totalPrice * 100);
+    if (amountPence < 1) throw new Error('Invalid order total');
+
+    const paymentIntent = await this.stripe.paymentIntents.create({
+      amount: amountPence,
+      currency: 'gbp',
+      automatic_payment_methods: { enabled: true },
+      metadata: { orderId: order.id },
+    });
+
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { paymentIntentId: paymentIntent.id },
+    });
+
+    return {
+      order,
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+    };
+  }
+
+  /**
+   * Confirm Express Checkout payment after client-side wallet authorization.
+   */
+  async confirmExpressPayment(paymentIntentId) {
+    if (!this.stripe) throw new Error('Stripe not configured. Set STRIPE_SECRET env var.');
+
+    const paymentIntent = await this.stripe.paymentIntents.retrieve(paymentIntentId, {
+      expand: ['latest_charge'],
+    });
+
+    if (!paymentIntent) throw new Error('Payment intent not found');
+
+    const orderId = paymentIntent.metadata?.orderId;
+
+    if (paymentIntent.status !== 'succeeded') {
+      if (orderId) {
+        await orderService.abandonUnpaidOrder(orderId, 'Express checkout payment not completed');
+      }
+      throw new Error('Payment not completed');
+    }
+
+    if (!orderId) throw new Error('Order id missing from payment intent metadata');
+
+    const stripeShippingAddress = mapPaymentIntentShipping(paymentIntent);
+    const updatedOrder = await orderService.confirmPayment(
+      orderId,
+      'PROCESSING',
+      'PAID',
+      stripeShippingAddress,
+    );
+
+    return updatedOrder;
   }
 }
 

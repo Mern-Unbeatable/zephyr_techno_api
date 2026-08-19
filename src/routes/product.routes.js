@@ -13,9 +13,12 @@ publicRouter.get('/attributes', attributesController.getPublicProductAttributes)
 publicRouter.get('/:id', productController.getProductById);
 publicRouter.get('/', productController.getAllProducts);
 publicRouter.post('/promo/validate', optionalAuthenticate, promoController.validatePromoCode);
+publicRouter.get('/stripe-config', paymentsController.getStripeConfig);
 publicRouter.post('/checkout', optionalAuthenticate, paymentsController.createCheckoutSession);
 publicRouter.post('/checkout/confirm', paymentsController.confirmCheckoutSession);
 publicRouter.post('/checkout/cancel', paymentsController.cancelUnpaidCheckout);
+publicRouter.post('/express-checkout/intent', optionalAuthenticate, paymentsController.createExpressPaymentIntent);
+publicRouter.post('/express-checkout/confirm', paymentsController.confirmExpressPayment);
 
 // Admin product routes
 const adminRouter = Router();

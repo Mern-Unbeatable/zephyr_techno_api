@@ -81,6 +81,68 @@ class PaymentsController {
 
     res.status(200).json({ success: true, message: 'Unpaid checkout discarded' });
   });
+
+  getStripeConfig = asyncHandler(async (_req, res) => {
+    const publishableKey = paymentsService.getPublishableKey();
+    if (!publishableKey) {
+      return res.status(503).json({ success: false, message: 'Stripe publishable key not configured' });
+    }
+    res.status(200).json({ success: true, data: { publishableKey } });
+  });
+
+  createExpressPaymentIntent = asyncHandler(async (req, res) => {
+    const userId = req.user?.id || null;
+    const guestSessionId = req.body.guestSessionId || req.query.guestSessionId;
+
+    if (!userId && !guestSessionId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Either login or provide guestSessionId',
+      });
+    }
+
+    const { productId, colorId, storageOptionId, quantity, shippingMethod, shippingCost } = req.body;
+
+    if (!productId) {
+      return res.status(400).json({ success: false, message: 'productId is required' });
+    }
+
+    const directProduct = {
+      productId,
+      colorId: colorId || null,
+      storageOptionId: storageOptionId || null,
+      quantity: parseInt(quantity, 10) || 1,
+    };
+
+    const { order, clientSecret, paymentIntentId } = await paymentsService.createExpressPaymentIntent(
+      userId,
+      guestSessionId,
+      req.body.guestEmail || null,
+      directProduct,
+      shippingMethod,
+      shippingCost,
+    );
+
+    res.status(201).json({
+      success: true,
+      data: {
+        orderId: order.id,
+        clientSecret,
+        paymentIntentId,
+        amount: order.totalPrice,
+      },
+    });
+  });
+
+  confirmExpressPayment = asyncHandler(async (req, res) => {
+    const { paymentIntentId } = req.body;
+    if (!paymentIntentId) {
+      return res.status(400).json({ success: false, message: 'paymentIntentId is required' });
+    }
+
+    const order = await paymentsService.confirmExpressPayment(paymentIntentId);
+    res.status(200).json({ success: true, data: order });
+  });
 }
 
 export default new PaymentsController();
