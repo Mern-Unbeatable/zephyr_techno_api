@@ -326,7 +326,9 @@ class PaymentsService {
           console.warn(`[Stripe] Domain ${domain_name}:`, data.error?.message || data);
           continue;
         }
-        console.log(`[Stripe] Apple Pay domain ready: ${domain_name} (${data.apple_pay?.status || 'registered'})`);
+        console.log(
+          `[Stripe] Wallet domain ready: ${domain_name} (apple_pay=${data.apple_pay?.status || 'registered'}, google_pay=${data.google_pay?.status || 'registered'})`,
+        );
       } catch (err) {
         console.warn(`[Stripe] Could not register domain ${domain_name}:`, err.message);
       }
