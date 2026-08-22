@@ -608,6 +608,7 @@ class OrderService {
     orderStatus = 'PROCESSING',
     paymentStatus = 'PAID',
     stripeShippingAddress = null,
+    shippingSelection = null,
   ) {
     const existing = await prisma.order.findUnique({
       where: { id: orderId },
@@ -753,6 +754,16 @@ class OrderService {
         data: {
           orderStatus,
           paymentStatus,
+          ...(shippingSelection
+            ? {
+                shippingMethod: shippingSelection.method,
+                shippingCost: shippingSelection.cost,
+                totalPrice:
+                  Number(existing.totalPrice) -
+                  Number(existing.shippingCost || 0) +
+                  Number(shippingSelection.cost || 0),
+              }
+            : {}),
         },
         include: {
           address: {

@@ -12,6 +12,48 @@ const PLACEHOLDER_SHIPPING = {
   country: 'United Kingdom',
 };
 
+const CHECKOUT_SHIPPING_OPTIONS = [
+  {
+    shipping_rate_data: {
+      type: 'fixed_amount',
+      fixed_amount: { amount: 0, currency: 'gbp' },
+      display_name: 'Standard Delivery',
+      delivery_estimate: {
+        minimum: { unit: 'business_day', value: 3 },
+        maximum: { unit: 'business_day', value: 5 },
+      },
+    },
+  },
+  {
+    shipping_rate_data: {
+      type: 'fixed_amount',
+      fixed_amount: { amount: 1500, currency: 'gbp' },
+      display_name: 'Express Delivery',
+      delivery_estimate: {
+        minimum: { unit: 'business_day', value: 1 },
+        maximum: { unit: 'business_day', value: 2 },
+      },
+    },
+  },
+];
+
+function mapStripeShippingSelection(session) {
+  const amountPence = session.shipping_cost?.amount_total;
+  const rate = session.shipping_cost?.shipping_rate;
+  const displayName =
+    (typeof rate === 'object' && rate?.display_name) ||
+    session.shipping_details?.carrier ||
+    null;
+
+  if (amountPence == null && !displayName) return null;
+
+  const cost = Number(amountPence || 0) / 100;
+  return {
+    method: displayName || (cost >= 15 ? 'Express Delivery' : 'Standard Delivery'),
+    cost,
+  };
+}
+
 function mapCountry(codeOrName) {
   if (!codeOrName) return 'United Kingdom';
   if (codeOrName === 'GB' || codeOrName === 'UK') return 'United Kingdom';
@@ -224,6 +266,7 @@ class PaymentsService {
       },
       phone_number_collection: { enabled: true },
       allow_promotion_codes: true,
+      shipping_options: CHECKOUT_SHIPPING_OPTIONS,
       line_items,
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -251,7 +294,9 @@ class PaymentsService {
   async confirmCheckoutSession(sessionId) {
     if (!this.stripe) throw new Error('Stripe not configured. Set STRIPE_SECRET env var.');
 
-    const session = await this.stripe.checkout.sessions.retrieve(sessionId);
+    const session = await this.stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['shipping_cost.shipping_rate'],
+    });
     if (!session) throw new Error('Checkout session not found');
 
     const orderId = session.metadata?.orderId;
@@ -272,6 +317,7 @@ class PaymentsService {
       'PROCESSING',
       'PAID',
       stripeShippingAddress,
+      mapStripeShippingSelection(session),
     );
 
     return updatedOrder;
