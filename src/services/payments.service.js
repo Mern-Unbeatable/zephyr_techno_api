@@ -219,7 +219,9 @@ class PaymentsService {
       mode: 'payment',
       customer_email: userEmail || undefined,
       billing_address_collection: 'auto',
-      shipping_address_collection: { allowed_countries: ['GB'] },
+      shipping_address_collection: {
+        allowed_countries: ['GB', 'IE', 'GG', 'JE', 'IM'],
+      },
       phone_number_collection: { enabled: true },
       allow_promotion_codes: true,
       line_items,
