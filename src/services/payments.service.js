@@ -94,7 +94,10 @@ function mapStripeCollectedAddress(session) {
 class PaymentsService {
   constructor() {
     this.stripeSecret = process.env.STRIPE_SECRET || null;
-    if (this.stripeSecret) this.stripe = new Stripe(this.stripeSecret, { apiVersion: '2022-11-15' });
+    if (this.stripeSecret) {
+      this.stripe = new Stripe(this.stripeSecret, { apiVersion: '2022-11-15' });
+      this.stripeCheckout = new Stripe(this.stripeSecret, { apiVersion: '2024-11-20.acacia' });
+    }
   }
 
   async #draftShippingAddress(userId, shippingAddress, collectAddressOnStripe) {
@@ -215,7 +218,7 @@ class PaymentsService {
     const sessionConfig = {
       mode: 'payment',
       customer_email: userEmail || undefined,
-      billing_address_collection: 'required',
+      billing_address_collection: 'auto',
       shipping_address_collection: { allowed_countries: ['GB'] },
       phone_number_collection: { enabled: true },
       allow_promotion_codes: true,
@@ -284,20 +287,28 @@ class PaymentsService {
   }
 
   async #createCheckoutSessionWithWallets(sessionConfig) {
+    const stripe = this.stripeCheckout || this.stripe;
     try {
-      return await this.stripe.checkout.sessions.create({
+      return await stripe.checkout.sessions.create({
         ...sessionConfig,
-        payment_method_types: ['card', 'paypal', 'klarna'],
+        automatic_payment_methods: { enabled: true },
       });
     } catch (error) {
       console.warn(
-        '[Stripe] PayPal/Klarna checkout session failed, falling back to card:',
+        '[Stripe] Checkout with automatic payment methods failed, falling back:',
         error.message,
       );
-      return this.stripe.checkout.sessions.create({
-        ...sessionConfig,
-        payment_method_types: ['card'],
-      });
+      try {
+        return await stripe.checkout.sessions.create({
+          ...sessionConfig,
+          payment_method_types: ['card', 'paypal', 'klarna'],
+        });
+      } catch (inner) {
+        return this.stripe.checkout.sessions.create({
+          ...sessionConfig,
+          payment_method_types: ['card'],
+        });
+      }
     }
   }
 
