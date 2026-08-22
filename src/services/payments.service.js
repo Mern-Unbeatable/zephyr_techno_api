@@ -214,13 +214,11 @@ class PaymentsService {
 
     const sessionConfig = {
       mode: 'payment',
-      locale: 'en-GB',
       customer_email: userEmail || undefined,
-      billing_address_collection: 'auto',
+      billing_address_collection: 'required',
       shipping_address_collection: { allowed_countries: ['GB'] },
       phone_number_collection: { enabled: true },
       allow_promotion_codes: true,
-      automatic_payment_methods: { enabled: true },
       line_items,
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -287,15 +285,17 @@ class PaymentsService {
 
   async #createCheckoutSessionWithWallets(sessionConfig) {
     try {
-      return await this.stripe.checkout.sessions.create(sessionConfig);
+      return await this.stripe.checkout.sessions.create({
+        ...sessionConfig,
+        payment_method_types: ['card', 'paypal', 'klarna'],
+      });
     } catch (error) {
       console.warn(
-        '[Stripe] Checkout session with automatic payment methods failed, falling back to card:',
+        '[Stripe] PayPal/Klarna checkout session failed, falling back to card:',
         error.message,
       );
-      const { automatic_payment_methods, ...rest } = sessionConfig;
       return this.stripe.checkout.sessions.create({
-        ...rest,
+        ...sessionConfig,
         payment_method_types: ['card'],
       });
     }
