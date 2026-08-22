@@ -216,16 +216,11 @@ class PaymentsService {
       mode: 'payment',
       locale: 'en-GB',
       customer_email: userEmail || undefined,
-      billing_address_collection: 'required',
+      billing_address_collection: 'auto',
       shipping_address_collection: { allowed_countries: ['GB'] },
       phone_number_collection: { enabled: true },
       allow_promotion_codes: true,
-      custom_text: {
-        shipping_address: {
-          message:
-            'Type your UK address for suggestions, or tap “Enter address manually” to show Address line 1, line 2, town/city, postcode and phone.',
-        },
-      },
+      automatic_payment_methods: { enabled: true },
       line_items,
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -292,17 +287,15 @@ class PaymentsService {
 
   async #createCheckoutSessionWithWallets(sessionConfig) {
     try {
-      return await this.stripe.checkout.sessions.create({
-        ...sessionConfig,
-        payment_method_types: ['card', 'paypal', 'klarna'],
-      });
+      return await this.stripe.checkout.sessions.create(sessionConfig);
     } catch (error) {
       console.warn(
-        '[Stripe] PayPal/Klarna checkout session failed, falling back to card:',
+        '[Stripe] Checkout session with automatic payment methods failed, falling back to card:',
         error.message,
       );
+      const { automatic_payment_methods, ...rest } = sessionConfig;
       return this.stripe.checkout.sessions.create({
-        ...sessionConfig,
+        ...rest,
         payment_method_types: ['card'],
       });
     }
