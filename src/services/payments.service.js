@@ -214,21 +214,20 @@ class PaymentsService {
 
     const sessionConfig = {
       mode: 'payment',
+      locale: 'en-GB',
       customer_email: userEmail || undefined,
       billing_address_collection: 'required',
+      shipping_address_collection: { allowed_countries: ['GB'] },
+      phone_number_collection: { enabled: true },
+      allow_promotion_codes: true,
       line_items,
       success_url: successUrl,
       cancel_url: cancelUrl,
       metadata: {
         orderId: order.id,
-        collectAddressOnStripe: collectAddressOnStripe ? 'true' : 'false',
+        collectAddressOnStripe: 'true',
       },
     };
-
-    if (collectAddressOnStripe) {
-      sessionConfig.shipping_address_collection = { allowed_countries: ['GB'] };
-      sessionConfig.phone_number_collection = { enabled: true };
-    }
 
     const session = await this.#createCheckoutSessionWithWallets(sessionConfig);
 
