@@ -213,10 +213,9 @@ class PaymentsService {
     const cancelUrl = `${cancelBase}${cancelBase.includes('?') ? '&' : '?'}orderId=${order.id}`;
 
     const sessionConfig = {
-      payment_method_types: ['card'],
       mode: 'payment',
       customer_email: userEmail || undefined,
-      billing_address_collection: collectAddressOnStripe ? 'required' : 'auto',
+      billing_address_collection: 'required',
       line_items,
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -231,7 +230,7 @@ class PaymentsService {
       sessionConfig.phone_number_collection = { enabled: true };
     }
 
-    const session = await this.stripe.checkout.sessions.create(sessionConfig);
+    const session = await this.#createCheckoutSessionWithWallets(sessionConfig);
 
     // Persist Stripe session id for cancel / reconcile
     await prisma.order.update({
@@ -284,6 +283,24 @@ class PaymentsService {
 
   getPublishableKey() {
     return getStripePublishableKey();
+  }
+
+  async #createCheckoutSessionWithWallets(sessionConfig) {
+    try {
+      return await this.stripe.checkout.sessions.create({
+        ...sessionConfig,
+        payment_method_types: ['card', 'paypal', 'klarna'],
+      });
+    } catch (error) {
+      console.warn(
+        '[Stripe] PayPal/Klarna checkout session failed, falling back to card:',
+        error.message,
+      );
+      return this.stripe.checkout.sessions.create({
+        ...sessionConfig,
+        payment_method_types: ['card'],
+      });
+    }
   }
 
   #frontendHostnames() {
@@ -345,6 +362,7 @@ class PaymentsService {
     directProduct,
     shippingMethod = 'Standard Delivery',
     shippingCost = 0,
+    shippingAddress = null,
   ) {
     if (!this.stripe) throw new Error('Stripe not configured. Set STRIPE_SECRET env var.');
 
@@ -357,8 +375,21 @@ class PaymentsService {
       guestEmail: userId ? null : guestEmail,
     });
 
+    const resolvedShipping =
+      shippingAddress?.street && shippingAddress?.city && shippingAddress?.zipCode
+        ? {
+            fullName: shippingAddress.fullName || 'Customer',
+            phone: shippingAddress.phone || null,
+            street: shippingAddress.street,
+            city: shippingAddress.city,
+            state: shippingAddress.state || null,
+            zipCode: shippingAddress.zipCode,
+            country: shippingAddress.country || 'United Kingdom',
+          }
+        : PLACEHOLDER_SHIPPING;
+
     const order = await orderService.createOrder(userId, guestSessionId, guestEmail, {
-      shippingAddress: PLACEHOLDER_SHIPPING,
+      shippingAddress: resolvedShipping,
       paymentMethod: 'STRIPE',
       shippingMethod,
       shippingCost: parseFloat(shippingCost) || 0,
