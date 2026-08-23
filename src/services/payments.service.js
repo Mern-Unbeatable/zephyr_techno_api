@@ -267,8 +267,12 @@ class PaymentsService {
       adaptive_pricing: { enabled: false },
       customer_email: userEmail || undefined,
       billing_address_collection: 'auto',
+      // Stripe hides the address search box if only GB is allowed and shows
+      // the full UK form instead. Extra UK-related countries keep the
+      // Address Element: name + country + one address field + suggestions
+      // + "Enter address manually". Default country stays United Kingdom.
       shipping_address_collection: {
-        allowed_countries: ['GB'],
+        allowed_countries: ['GB', 'IE', 'GG', 'JE', 'IM'],
       },
       phone_number_collection: { enabled: true },
       allow_promotion_codes: true,
