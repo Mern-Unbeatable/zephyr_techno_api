@@ -259,11 +259,10 @@ class PaymentsService {
 
     const sessionConfig = {
       mode: 'payment',
-      locale: 'en-GB',
       customer_email: userEmail || undefined,
       billing_address_collection: 'auto',
       shipping_address_collection: {
-        allowed_countries: ['GB', 'IE', 'GG', 'JE', 'IM'],
+        allowed_countries: ['GB'],
       },
       phone_number_collection: { enabled: true },
       allow_promotion_codes: true,
