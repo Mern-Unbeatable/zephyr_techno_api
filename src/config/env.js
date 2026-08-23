@@ -10,6 +10,7 @@ for (const key of REQUIRED_VARS) {
 
 const defaultCorsOrigins = [
   'http://localhost:5173',
+  'http://localhost:5174',
   'http://localhost:3000',
   'https://zephyr-techno.maktechgroup.tech',
   'https://zephyrtechnology.co.uk',

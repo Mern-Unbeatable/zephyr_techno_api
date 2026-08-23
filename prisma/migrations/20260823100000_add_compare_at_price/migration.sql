@@ -1,0 +1,2 @@
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "compareAtPrice" DECIMAL(12,2);
+ALTER TABLE "ProductStorageOption" ADD COLUMN IF NOT EXISTS "compareAtPrice" DECIMAL(12,2);

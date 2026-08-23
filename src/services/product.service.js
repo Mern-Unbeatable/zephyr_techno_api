@@ -63,6 +63,7 @@ class ProductService {
               fallbackPrice != null && fallbackPrice !== ''
                 ? Math.max(0, Number(fallbackPrice) || 0)
                 : null,
+            compareAtPrice: null,
           },
         ]),
       );
@@ -91,9 +92,17 @@ class ProductService {
             ? Math.max(0, Number(fallbackPrice) || 0)
             : null;
 
+      const compareAt =
+        entry?.compareAtPrice !== undefined &&
+        entry?.compareAtPrice !== null &&
+        entry?.compareAtPrice !== ''
+          ? Math.max(0, Number(entry.compareAtPrice) || 0)
+          : null;
+
       variantMap.set(storageOptionId, {
         stockQuantity: Math.max(0, parseInt(entry.stockQuantity, 10) || 0),
         price,
+        compareAtPrice: compareAt && compareAt > 0 ? compareAt : null,
       });
     }
 
@@ -105,6 +114,7 @@ class ProductService {
             fallbackPrice != null && fallbackPrice !== ''
               ? Math.max(0, Number(fallbackPrice) || 0)
               : null,
+          compareAtPrice: null,
         });
       }
     }
@@ -117,6 +127,7 @@ class ProductService {
       storageOptionId,
       stockQuantity: variant.stockQuantity ?? 0,
       price: variant.price,
+      compareAtPrice: variant.compareAtPrice ?? null,
     }));
   }
 
@@ -311,6 +322,7 @@ class ProductService {
         const variant = variantMap.get(storageOptionId) ?? {
           stockQuantity: 0,
           price: null,
+          compareAtPrice: null,
         };
         const current = existingByStorageId.get(storageOptionId);
 
@@ -320,6 +332,7 @@ class ProductService {
             data: {
               stockQuantity: variant.stockQuantity ?? 0,
               ...(variant.price != null ? { price: variant.price } : {}),
+              compareAtPrice: variant.compareAtPrice ?? null,
               isDeleted: false,
               deletedAt: null,
             },
@@ -333,6 +346,7 @@ class ProductService {
             storageOptionId,
             stockQuantity: variant.stockQuantity ?? 0,
             ...(variant.price != null ? { price: variant.price } : {}),
+            compareAtPrice: variant.compareAtPrice ?? null,
           },
         });
       }),
@@ -465,6 +479,8 @@ class ProductService {
       description: product.description,
       introduction: product.introduction,
       basePrice: product.basePrice,
+      compareAtPrice:
+        product.compareAtPrice != null ? parseFloat(product.compareAtPrice) : null,
       stockQuantity:
         sumVariantStocks(product.variantStocks) ||
         sumStorageStocks(product.storageOptions) ||
@@ -536,6 +552,12 @@ class ProductService {
             ps.price != null
               ? parseFloat(ps.price)
               : parseFloat(product.basePrice),
+          compareAtPrice:
+            ps.compareAtPrice != null
+              ? parseFloat(ps.compareAtPrice)
+              : product.compareAtPrice != null
+                ? parseFloat(product.compareAtPrice)
+                : null,
         })),
       ),
       availableVariantStocks: (product.variantStocks || []).map((vs) => ({
@@ -556,10 +578,29 @@ class ProductService {
       ? buildImageUrl(product.productGalleries[0].imageUrl)
       : null;
 
+    const productRrp =
+      product.compareAtPrice != null ? parseFloat(product.compareAtPrice) : null;
+    const storages = product.storageOptions || [];
+    const pricedStorages = storages.filter(
+      (row) => row.price != null && Number(row.price) > 0,
+    );
+    const cheapestStorage = pricedStorages.length
+      ? pricedStorages.reduce((lowest, row) =>
+          Number(row.price) < Number(lowest.price) ? row : lowest,
+        )
+      : null;
+    const storageRrp =
+      cheapestStorage?.compareAtPrice != null
+        ? parseFloat(cheapestStorage.compareAtPrice)
+        : null;
+    const compareAtPrice =
+      storageRrp > 0 ? storageRrp : productRrp > 0 ? productRrp : null;
+
     return {
       id: product.id,
       title: product.title,
       basePrice: product.basePrice,
+      compareAtPrice,
       stockQuantity:
         sumVariantStocks(product.variantStocks) ||
         sumStorageStocks(product.storageOptions) ||
@@ -839,6 +880,12 @@ class ProductService {
           description,
           introduction,
           basePrice: productBasePrice,
+          compareAtPrice:
+            data.compareAtPrice !== undefined &&
+            data.compareAtPrice !== null &&
+            data.compareAtPrice !== ''
+              ? Number(data.compareAtPrice) || null
+              : null,
           stockQuantity: productTotalStock,
           listingStatus: listingStatus || "INACTIVE",
           categoryId,
@@ -871,6 +918,7 @@ class ProductService {
                 storageOptionId: storageId,
                 stockQuantity: variant.stockQuantity ?? 0,
                 price: variant.price ?? productBasePrice,
+                compareAtPrice: variant.compareAtPrice ?? null,
               };
             }),
           },
@@ -970,6 +1018,7 @@ class ProductService {
         id: true,
         title: true,
         basePrice: true,
+        compareAtPrice: true,
         stockQuantity: true,
         listingStatus: true,
         isFeatured: true,
@@ -986,7 +1035,7 @@ class ProductService {
         colors: { ...this.#activeColorInclude, select: { colorId: true } },
         storageOptions: {
           ...this.#activeStorageInclude,
-          select: { storageOptionId: true, stockQuantity: true, price: true },
+          select: { storageOptionId: true, stockQuantity: true, price: true, compareAtPrice: true },
         },
       },
     }),
@@ -1067,6 +1116,8 @@ class ProductService {
         id: p.id,
         title: p.title,
         basePrice: parseFloat(p.basePrice),
+        compareAtPrice:
+          p.compareAtPrice != null ? parseFloat(p.compareAtPrice) : null,
         thumbnail: p.productGalleries?.[0] 
           ? buildImageUrl(p.productGalleries[0].imageUrl)
           : null,
@@ -1165,14 +1216,19 @@ class ProductService {
       "description",
       "introduction",
       "basePrice",
+      "compareAtPrice",
       "listingStatus",
     ];
 
     for (const field of allowedFields) {
       if (data[field] !== undefined) {
         updateData[field] =
-          field === "basePrice"
-            ? Number(data[field])
+          field === "basePrice" || field === "compareAtPrice"
+            ? data[field] === '' || data[field] == null
+              ? field === "compareAtPrice"
+                ? null
+                : Number(data[field])
+              : Number(data[field])
             : data[field];
       }
     }
@@ -1592,6 +1648,8 @@ class ProductService {
                   ? {}
                   : { stockQuantity: variant.stockQuantity ?? 0 }),
                 ...(variant.price != null ? { price: variant.price } : {}),
+                ...(variant.compareAtPrice !== undefined
+                  ? { compareAtPrice: variant.compareAtPrice } : {}),
               },
             }),
           ),

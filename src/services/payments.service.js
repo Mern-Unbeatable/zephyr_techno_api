@@ -259,6 +259,7 @@ class PaymentsService {
 
     const sessionConfig = {
       mode: 'payment',
+      locale: 'en-GB',
       customer_email: userEmail || undefined,
       billing_address_collection: 'auto',
       shipping_address_collection: {
