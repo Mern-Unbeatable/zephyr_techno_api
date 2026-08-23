@@ -106,6 +106,7 @@ function mapPaymentIntentShipping(paymentIntent) {
   };
 }
 
+
 function mapStripeCollectedAddress(session) {
   const shipping = session.shipping_details || session.shipping || {};
   const addr = shipping.address || session.collected_information?.shipping_details?.address || {};
