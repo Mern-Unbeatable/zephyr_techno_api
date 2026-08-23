@@ -13,7 +13,6 @@ publicRouter.get('/attributes', attributesController.getPublicProductAttributes)
 publicRouter.get('/stripe-config', paymentsController.getStripeConfig);
 publicRouter.post('/promo/validate', optionalAuthenticate, promoController.validatePromoCode);
 publicRouter.post('/checkout', optionalAuthenticate, paymentsController.createCheckoutSession);
-publicRouter.post('/checkout/shipping', optionalAuthenticate, paymentsController.updateCheckoutShipping);
 publicRouter.post('/checkout/confirm', paymentsController.confirmCheckoutSession);
 publicRouter.post('/checkout/cancel', paymentsController.cancelUnpaidCheckout);
 publicRouter.post('/express-checkout/intent', optionalAuthenticate, paymentsController.createExpressPaymentIntent);
