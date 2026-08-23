@@ -259,6 +259,11 @@ class PaymentsService {
 
     const sessionConfig = {
       mode: 'payment',
+      // `en` uses Checkout's Address Element autocomplete (type to search).
+      // `en-GB` forces the expanded UK form with no suggestion box.
+      locale: 'en',
+      // Dashboard Adaptive Pricing was selecting USD from the shopper's IP.
+      adaptive_pricing: { enabled: false },
       customer_email: userEmail || undefined,
       billing_address_collection: 'auto',
       shipping_address_collection: {
@@ -352,8 +357,9 @@ class PaymentsService {
           payment_method_types: ['card', 'paypal', 'klarna'],
         });
       } catch (inner) {
+        const { adaptive_pricing: _adaptivePricing, ...legacyConfig } = sessionConfig;
         return this.stripe.checkout.sessions.create({
-          ...sessionConfig,
+          ...legacyConfig,
           payment_method_types: ['card'],
         });
       }
