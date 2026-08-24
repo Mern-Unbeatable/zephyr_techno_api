@@ -466,7 +466,7 @@ class PaymentsService {
     const paymentIntent = await this.stripe.paymentIntents.create({
       amount: amountPence,
       currency: 'gbp',
-      automatic_payment_methods: { enabled: true },
+      automatic_payment_methods: { enabled: true, allow_redirects: 'always' },
       receipt_email: guestEmail || undefined,
       metadata: { orderId: order.id },
     });
@@ -498,6 +498,13 @@ class PaymentsService {
     const orderId = paymentIntent.metadata?.orderId;
 
     if (paymentIntent.status !== 'succeeded') {
+      if (
+        paymentIntent.status === 'processing' ||
+        paymentIntent.status === 'requires_action' ||
+        paymentIntent.status === 'requires_capture'
+      ) {
+        throw new Error('Payment is still processing');
+      }
       if (orderId) {
         await orderService.abandonUnpaidOrder(orderId, 'Express checkout payment not completed');
       }
