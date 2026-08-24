@@ -267,12 +267,13 @@ class PaymentsService {
       adaptive_pricing: { enabled: false },
       customer_email: userEmail || undefined,
       billing_address_collection: 'auto',
-      // Stripe hides the address search box if only GB is allowed and shows
-      // the full UK form instead. Extra UK-related countries keep the
-      // Address Element: name + country + one address field + suggestions
-      // + "Enter address manually". Default country stays United Kingdom.
+      // UK-only (or UK-format islands) uses Stripe's static GB form with
+      // no Google Places suggestions. Include Places-enabled countries so
+      // Checkout mounts Address Element: typing Address line 1 shows
+      // suggestions; "Enter address manually" still opens the full UK fields.
+      // Default selected country remains United Kingdom (account/GBP).
       shipping_address_collection: {
-        allowed_countries: ['GB', 'IE', 'GG', 'JE', 'IM'],
+        allowed_countries: ['GB', 'US', 'CA', 'AU'],
       },
       phone_number_collection: { enabled: true },
       allow_promotion_codes: true,
@@ -359,7 +360,7 @@ class PaymentsService {
       try {
         return await stripe.checkout.sessions.create({
           ...sessionConfig,
-          payment_method_types: ['card', 'paypal', 'klarna'],
+          payment_method_types: ['card', 'link', 'paypal', 'klarna'],
         });
       } catch (inner) {
         const { adaptive_pricing: _adaptivePricing, ...legacyConfig } = sessionConfig;
