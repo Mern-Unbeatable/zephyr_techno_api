@@ -260,20 +260,14 @@ class PaymentsService {
 
     const sessionConfig = {
       mode: 'payment',
-      // `en` uses Checkout's Address Element autocomplete (type to search).
-      // `en-GB` forces the expanded UK form with no suggestion box.
-      locale: 'en',
-      // Dashboard Adaptive Pricing was selecting USD from the shopper's IP.
+      // Do not set locale. `en-GB` / `en` make Checkout use the static UK
+      // postal form with no Google Places suggestions. Browser `auto` is
+      // what worked on hosted Checkout with GB-only shipping.
       adaptive_pricing: { enabled: false },
       customer_email: userEmail || undefined,
       billing_address_collection: 'auto',
-      // UK-only (or UK-format islands) uses Stripe's static GB form with
-      // no Google Places suggestions. Include Places-enabled countries so
-      // Checkout mounts Address Element: typing Address line 1 shows
-      // suggestions; "Enter address manually" still opens the full UK fields.
-      // Default selected country remains United Kingdom (account/GBP).
       shipping_address_collection: {
-        allowed_countries: ['GB', 'US', 'CA', 'AU'],
+        allowed_countries: ['GB'],
       },
       phone_number_collection: { enabled: true },
       allow_promotion_codes: true,
