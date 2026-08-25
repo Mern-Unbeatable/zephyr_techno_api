@@ -426,6 +426,7 @@ class PaymentsService {
     shippingMethod = 'Standard Delivery',
     shippingCost = 0,
     shippingAddress = null,
+    paymentMethodTypes = null,
   ) {
     if (!this.stripe) throw new Error('Stripe not configured. Set STRIPE_SECRET env var.');
 
@@ -463,13 +464,24 @@ class PaymentsService {
     const amountPence = Math.round(order.totalPrice * 100);
     if (amountPence < 1) throw new Error('Invalid order total');
 
-    const paymentIntent = await this.stripe.paymentIntents.create({
+    const stripe = this.stripeCheckout || this.stripe;
+    const requestedTypes = Array.isArray(paymentMethodTypes)
+      ? paymentMethodTypes.filter((type) => typeof type === 'string' && type.trim())
+      : [];
+    const intentParams = {
       amount: amountPence,
       currency: 'gbp',
-      automatic_payment_methods: { enabled: true, allow_redirects: 'always' },
       receipt_email: guestEmail || undefined,
       metadata: { orderId: order.id },
-    });
+    };
+    if (requestedTypes.length > 0) {
+      // Elements collected with paymentMethodTypes cannot confirm a PI
+      // that was created with automatic_payment_methods.
+      intentParams.payment_method_types = requestedTypes;
+    } else {
+      intentParams.automatic_payment_methods = { enabled: true, allow_redirects: 'always' };
+    }
+    const paymentIntent = await stripe.paymentIntents.create(intentParams);
 
     await prisma.order.update({
       where: { id: order.id },

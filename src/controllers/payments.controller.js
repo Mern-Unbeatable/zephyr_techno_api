@@ -101,7 +101,7 @@ class PaymentsController {
       });
     }
 
-    const { productId, colorId, storageOptionId, quantity, shippingMethod, shippingCost, shippingAddress } = req.body;
+    const { productId, colorId, storageOptionId, quantity, shippingMethod, shippingCost, shippingAddress, paymentMethodTypes } = req.body;
 
     if (!productId) {
       return res.status(400).json({ success: false, message: 'productId is required' });
@@ -122,6 +122,7 @@ class PaymentsController {
       shippingMethod,
       shippingCost,
       shippingAddress || null,
+      paymentMethodTypes || null,
     );
 
     res.status(201).json({
