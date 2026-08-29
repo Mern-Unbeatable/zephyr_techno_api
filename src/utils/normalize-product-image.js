@@ -5,8 +5,8 @@ import sharp from 'sharp';
 /** Product gallery canvas — square so portrait phone photos fit without cropping. */
 export const PRODUCT_IMAGE_SIZE = 1080;
 
-/** Matches product card / gallery backgrounds (#F7F9FB). */
-const PAD_BACKGROUND = { r: 247, g: 249, b: 251, alpha: 1 };
+/** White pad so gallery padding matches photo white backgrounds. */
+const PAD_BACKGROUND = { r: 255, g: 255, b: 255, alpha: 1 };
 
 /**
  * Fit image into a square canvas with contain + padding (no crop).
