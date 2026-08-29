@@ -653,7 +653,7 @@ class ProductService {
     // Use introduction as description since the UI only provides Introduction
     const description = data.description || introduction || title;
 
-    // Validate required fields (conditionId is optional when category is "New")
+    // Validate required fields (conditionId is optional — listings are category-only)
     if (
       !title ||
       !categoryId ||
@@ -670,23 +670,15 @@ class ProductService {
     const category = await prisma.category.findUnique({ where: { id: categoryId }, select: { id: true, name: true } });
     if (!category) throw new AppError('Invalid category ID.', 400);
 
-    const categoryNameLower = String(category.name || '').toLowerCase();
-
-    // "New" and "Sealed" category products have no condition (conditionId = null)
+    // Product listings use Category only — condition is reserved for Sell Your Phone.
+    // Keep optional accept for legacy payloads, but never require it.
     let resolvedConditionId = null;
-    if (categoryNameLower === 'new' || categoryNameLower === 'sealed') {
-      resolvedConditionId = null;
-    } else {
-      // For non-"New" categories, conditionId is required
-      if (!conditionId) {
-        throw new AppError('conditionId is required for this category.', 400);
-      }
-      const condition = await prisma.condition.findUnique({ where: { id: conditionId }, select: { id: true, name: true } });
+    if (conditionId) {
+      const condition = await prisma.condition.findUnique({
+        where: { id: conditionId },
+        select: { id: true },
+      });
       if (!condition) throw new AppError('Invalid condition ID.', 400);
-      // Business rule: "Used" category cannot have "New" condition
-      if (categoryNameLower === 'used' && String(condition.name || '').toLowerCase() === 'new') {
-        throw new AppError('Products in "Used" category cannot have "New" condition.', 400);
-      }
       resolvedConditionId = conditionId;
     }
 
@@ -1233,41 +1225,30 @@ class ProductService {
       }
     }
 
-    if (data.categoryId || data.conditionId) {
+    if (data.categoryId || data.conditionId !== undefined) {
       const current = await prisma.product.findUnique({
         where: { id },
         select: { categoryId: true, conditionId: true },
       });
       if (!current) throw new AppError('Product not found.', 404);
 
-      const finalCategoryId = data.categoryId || current.categoryId;
-
-      const category = await prisma.category.findUnique({
-        where: { id: finalCategoryId },
-        select: { name: true },
-      });
-      if (!category) throw new AppError('Invalid category ID.', 400);
-
-      const categoryNameLower = String(category.name || '').toLowerCase();
-
-      if (categoryNameLower === 'new' || categoryNameLower === 'sealed') {
-        data.conditionId = null;
-      } else {
-        const finalConditionId = data.conditionId || current.conditionId;
-        const condition = await prisma.condition.findUnique({
-          where: { id: finalConditionId },
+      if (data.categoryId) {
+        const category = await prisma.category.findUnique({
+          where: { id: data.categoryId },
           select: { name: true },
         });
+        if (!category) throw new AppError('Invalid category ID.', 400);
+      }
+
+      // Empty string from FormData → clear condition (listings are category-only)
+      if (data.conditionId === '' || data.conditionId === null) {
+        data.conditionId = null;
+      } else if (data.conditionId) {
+        const condition = await prisma.condition.findUnique({
+          where: { id: data.conditionId },
+          select: { id: true },
+        });
         if (!condition) throw new AppError('Invalid condition ID.', 400);
-        if (
-          categoryNameLower === 'used' &&
-          String(condition.name || '').toLowerCase() === 'new'
-        ) {
-          throw new AppError(
-            'Products in "Used" category cannot have "New" condition.',
-            400,
-          );
-        }
       }
     }
 
