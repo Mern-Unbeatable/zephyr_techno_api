@@ -2,14 +2,17 @@ import fs from 'fs/promises';
 import path from 'path';
 import sharp from 'sharp';
 
-/** Product gallery canvas — square so portrait phone photos fit without cropping. */
-export const PRODUCT_IMAGE_SIZE = 1080;
+/** Product gallery canvas — 4:3 to match product details gallery. */
+export const PRODUCT_IMAGE_WIDTH = 1440;
+export const PRODUCT_IMAGE_HEIGHT = 1080;
+/** @deprecated use PRODUCT_IMAGE_WIDTH / PRODUCT_IMAGE_HEIGHT */
+export const PRODUCT_IMAGE_SIZE = PRODUCT_IMAGE_WIDTH;
 
 /** White pad so gallery padding matches photo white backgrounds. */
 const PAD_BACKGROUND = { r: 255, g: 255, b: 255, alpha: 1 };
 
 /**
- * Fit image into a square canvas with contain + padding (no crop).
+ * Fit image into a 4:3 canvas with contain + padding (no crop).
  * Replaces the multer file on disk and updates the multer file descriptor.
  */
 export async function normalizeProductImageFile(file) {
@@ -17,12 +20,12 @@ export async function normalizeProductImageFile(file) {
 
   const dir = path.dirname(file.path);
   const base = path.basename(file.path, path.extname(file.path));
-  const outPath = path.join(dir, `${base}-sq.jpg`);
+  const outPath = path.join(dir, `${base}-4x3.jpg`);
 
   try {
     await sharp(file.path)
       .rotate()
-      .resize(PRODUCT_IMAGE_SIZE, PRODUCT_IMAGE_SIZE, {
+      .resize(PRODUCT_IMAGE_WIDTH, PRODUCT_IMAGE_HEIGHT, {
         fit: 'contain',
         background: PAD_BACKGROUND,
         withoutEnlargement: false,
