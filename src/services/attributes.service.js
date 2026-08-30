@@ -1,7 +1,7 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/app-error.js';
 import { buildImageUrl } from '../utils/url.js';
-import { sortStorageOptionsBySize } from '../utils/stock.js';
+import { sortStorageOptionsBySize, formatStorageLabel } from '../utils/stock.js';
 
 /**
  * Single service covering CRUD for all admin-managed product attribute models:
@@ -551,25 +551,27 @@ class AttributesService {
   // ─────────────────────────────────────────────────────────────
 
   async createStorageOption({ name }) {
-    name = this.#requireString(name, 'Storage name');
+    name = formatStorageLabel(this.#requireString(name, 'Storage name'));
     const deletedRecord = await this.#checkUniqueAndGetDeleted('storageOption', { name }, 'Storage option already exists.');
     if (deletedRecord) {
-      return prisma.storageOption.update({ where: { id: deletedRecord.id }, data: { isDeleted: false, deletedAt: null } });
+      return prisma.storageOption.update({ where: { id: deletedRecord.id }, data: { isDeleted: false, deletedAt: null, name } });
     }
     return prisma.storageOption.create({ data: { name } });
   }
 
   async getAllStorageOptions() {
-    return prisma.storageOption.findMany({ orderBy: { name: 'asc' } });
+    const rows = await prisma.storageOption.findMany({ orderBy: { name: 'asc' } });
+    return rows.map((row) => ({ ...row, name: formatStorageLabel(row.name) }));
   }
 
   async getStorageOptionById(id) {
-    return this.#findOrFail('storageOption', id, 'Storage option');
+    const row = await this.#findOrFail('storageOption', id, 'Storage option');
+    return { ...row, name: formatStorageLabel(row.name) };
   }
 
   async updateStorageOption(id, { name }) {
     await this.#findOrFail('storageOption', id, 'Storage option');
-    name = this.#requireString(name, 'Storage name');
+    name = formatStorageLabel(this.#requireString(name, 'Storage name'));
     const deletedRecord = await this.#checkUniqueAndGetDeleted('storageOption', { name }, 'Storage option already exists.', id);
     if (deletedRecord) throw new AppError('Name is currently used by a deleted storage option. Please use a different name.', 409);
     return prisma.storageOption.update({ where: { id }, data: { name } });
@@ -609,7 +611,12 @@ class AttributesService {
       models,
       conditions: filteredConditions,
       colors,
-      storageOptions: sortStorageOptionsBySize(storageOptions),
+      storageOptions: sortStorageOptionsBySize(
+        storageOptions.map((storage) => ({
+          ...storage,
+          name: formatStorageLabel(storage.name),
+        })),
+      ),
     };
   }
 

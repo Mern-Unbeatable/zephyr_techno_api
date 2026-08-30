@@ -3,7 +3,7 @@ import AppError from "../utils/app-error.js";
 import Mailer from "../utils/mailer.js";
 import { buildImageUrl, resolveProductThumbnail } from "../utils/url.js";
 import promoService from "./promo.service.js";
-import { resolveVariantStock, resolveStoragePrice, syncProductStockTotal } from "../utils/stock.js";
+import { resolveVariantStock, resolveStoragePrice, syncProductStockTotal, formatStorageLabel } from "../utils/stock.js";
 
 /**
  * OrderService
@@ -1144,7 +1144,7 @@ class OrderService {
             },
             storage: {
               id: item.storageOption.id,
-              name: item.storageOption.name,
+              name: formatStorageLabel(item.storageOption.name),
             },
           },
           subtotal: parseFloat(item.priceAtPurchase) * item.quantity,

@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import AppError from './app-error.js';
 import env from '../config/env.js';
 import { buildEmailSignature, getSignatureIconAttachments } from './email-signature.js';
+import { formatStorageLabel } from './stock.js';
 
 class Mailer {
   constructor() {
@@ -113,7 +114,7 @@ class Mailer {
     const rows = orderItems.map((item) => {
       const title = this.#escapeHtml(item.product?.title || 'Product');
       const color = this.#escapeHtml(item.color?.name || '');
-      const storage = this.#escapeHtml(item.storageOption?.name || '');
+      const storage = this.#escapeHtml(formatStorageLabel(item.storageOption?.name || ''));
       const options = [color, storage].filter(Boolean).join(' · ');
       const lineTotal = Number(item.priceAtPurchase) * Number(item.quantity);
 
@@ -199,7 +200,9 @@ class Mailer {
     ];
 
     for (const item of order.orderItems || []) {
-      const options = [item.color?.name, item.storageOption?.name].filter(Boolean).join(' · ');
+      const options = [item.color?.name, formatStorageLabel(item.storageOption?.name || '')]
+        .filter(Boolean)
+        .join(' · ');
       const lineTotal = Number(item.priceAtPurchase) * Number(item.quantity);
       lines.push(`- ${item.product?.title || 'Product'}${options ? ` (${options})` : ''} x${item.quantity}: ${this.#formatGbp(lineTotal)}`);
     }
@@ -276,7 +279,7 @@ class Mailer {
   async sendBackInStockNotification({ notification }) {
     const productTitle = this.#escapeHtml(notification.product?.title || 'Product');
     const colorName = this.#escapeHtml(notification.color?.name || '');
-    const storageName = this.#escapeHtml(notification.storageOption?.name || '');
+    const storageName = this.#escapeHtml(formatStorageLabel(notification.storageOption?.name || ''));
     const variantLabel = [colorName, storageName].filter(Boolean).join(' · ');
     const productUrl = `${env.frontendUrl}/product-details/${notification.productId}`;
 

@@ -26,13 +26,35 @@ export function variantStockKey(colorId, storageOptionId) {
 export function storageSizeInGb(name) {
   const match = String(name || '')
     .trim()
-    .match(/^(\d+(?:\.\d+)?)\s*(tb|gb|mb)?$/i);
+    .match(/^(\d+(?:\.\d+)?)\s*((?:tb|gb|mb)*)\s*$/i);
   if (!match) return Number.MAX_SAFE_INTEGER;
   const value = parseFloat(match[1]);
-  const unit = (match[2] || 'gb').toLowerCase();
-  if (unit === 'tb') return value * 1024;
-  if (unit === 'mb') return value / 1024;
+  const units = (match[2] || '').toLowerCase();
+  if (units.includes('tb')) return value * 1024;
+  if (units.includes('mb')) return value / 1024;
   return value;
+}
+
+/**
+ * Normalize storage labels for display/storage: "256 GB" → "256GB".
+ */
+export function formatStorageLabel(name) {
+  const raw = String(name ?? '')
+    .trim()
+    .replace(/(\d)\s+(gb|tb|mb)\b/gi, '$1$2');
+  if (!raw || raw === '—') return raw;
+
+  const match = raw.match(/^(\d+(?:\.\d+)?)\s*((?:tb|gb|mb)*)\s*$/i);
+  if (!match) {
+    const stripped = raw.replace(/\s*(gb|tb|mb)\s*/gi, '').trim();
+    return stripped ? `${stripped}GB` : raw;
+  }
+
+  const value = match[1];
+  const units = (match[2] || '').toLowerCase();
+  if (units.includes('tb')) return `${value}TB`;
+  if (units.includes('mb')) return `${value}MB`;
+  return `${value}GB`;
 }
 
 export function sortStorageOptionsBySize(options = [], nameKey = 'name') {

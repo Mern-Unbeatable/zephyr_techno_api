@@ -1,6 +1,7 @@
 import prisma from '../utils/prisma.js';
 import AppError from '../utils/app-error.js';
 import Mailer from '../utils/mailer.js';
+import { formatStorageLabel } from '../utils/stock.js';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -205,7 +206,7 @@ class StockNotificationService {
         : null,
       color: row.color ? { id: row.color.id, name: row.color.name } : null,
       storage: row.storageOption
-        ? { id: row.storageOption.id, name: row.storageOption.name }
+        ? { id: row.storageOption.id, name: formatStorageLabel(row.storageOption.name) }
         : null,
     };
   }

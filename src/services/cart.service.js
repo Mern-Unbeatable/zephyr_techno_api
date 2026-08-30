@@ -1,7 +1,7 @@
 import prisma from "../utils/prisma.js";
 import AppError from "../utils/app-error.js";
 import { resolveProductThumbnail } from "../utils/url.js";
-import { resolveVariantStock, resolveStoragePrice } from "../utils/stock.js";
+import { resolveVariantStock, resolveStoragePrice, formatStorageLabel } from "../utils/stock.js";
 
 /**
  * CartService
@@ -504,7 +504,7 @@ class CartService {
         },
         storage: {
           id: item.storageOption.id,
-          name: item.storageOption.name,
+          name: formatStorageLabel(item.storageOption.name),
         },
       },
       // Calculate item total (price × quantity)

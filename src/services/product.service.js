@@ -7,6 +7,7 @@ import {
   minStoragePrice,
   sortStorageOptionsBySize,
   variantStockKey,
+  formatStorageLabel,
 } from "../utils/stock.js";
 import stockNotificationService from "./stock-notification.service.js";
 
@@ -617,7 +618,7 @@ class ProductService {
       availableStorageOptions: sortStorageOptionsBySize(
         (product.storageOptions || []).map((ps) => ({
           id: ps.storageOption.id,
-          name: ps.storageOption.name,
+          name: formatStorageLabel(ps.storageOption.name),
           stockQuantity: ps.stockQuantity ?? 0,
           price:
             ps.price != null
@@ -722,7 +723,7 @@ class ProductService {
         (product.storageOptions || [])
           .map((ps) => ({
             id: ps.storageOption?.id,
-            name: ps.storageOption?.name,
+            name: formatStorageLabel(ps.storageOption?.name),
             price:
               ps.price != null
                 ? parseFloat(ps.price)

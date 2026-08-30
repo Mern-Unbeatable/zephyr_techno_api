@@ -2,6 +2,7 @@ import attributesService from "../services/attributes.service.js";
 import sellService from "../services/sell.service.js";
 import asyncHandler from "../utils/async-handler.js";
 import sellEventEmitter from "../utils/sell-events.js";
+import { formatStorageLabel } from "../utils/stock.js";
 
 // ---------------------------------------------------------------------------
 // Demo "bought" notifications — cycled every 30 s when no real sell has fired.
@@ -224,7 +225,7 @@ class SellController {
     const transformed = requests.map((r) => ({
       stringId: r.stringId,
       deviceModelName: r.deviceModel?.name || null,
-      storageOptionName: r.storageOption?.name || null,
+      storageOptionName: formatStorageLabel(r.storageOption?.name) || null,
       conditionName: r.condition?.name || null,
       baseOfferPrice: r.baseOfferPrice,
       status: statusLabel[r.status] || r.status,
@@ -256,7 +257,7 @@ class SellController {
         email: r.email,
         phone: r.phone,
         deviceModelName: r.deviceModel?.name || null,
-        storageOptionName: r.storageOption?.name || null,
+        storageOptionName: formatStorageLabel(r.storageOption?.name) || null,
         conditionName: r.condition?.name || null,
         baseOfferPrice: r.baseOfferPrice,
         userOfferedPrice: r.userOfferedPrice,
@@ -295,7 +296,7 @@ class SellController {
       email: rec.email,
       phone: rec.phone,
       deviceModelName: rec.deviceModel?.name || null,
-      storageOptionName: rec.storageOption?.name || null,
+      storageOptionName: formatStorageLabel(rec.storageOption?.name) || null,
       conditionName: rec.condition?.name || null,
       baseOfferPrice: rec.baseOfferPrice,
       userOfferedPrice: rec.userOfferedPrice,
