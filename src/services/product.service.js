@@ -647,6 +647,24 @@ class ProductService {
       createdAt: product.createdAt,
       colorIds: (product.colors || []).map((pc) => pc.colorId),
       storageOptionIds: (product.storageOptions || []).map((ps) => ps.storageOptionId),
+      availableColors: (product.colors || [])
+        .map((pc) => pc.color)
+        .filter(Boolean)
+        .map((color) => ({
+          id: color.id,
+          name: color.name,
+          hexCode: color.hexCode || null,
+        })),
+      availableStorageOptions: sortStorageOptionsBySize(
+        (product.storageOptions || [])
+          .map((ps) => ps.storageOption)
+          .filter(Boolean)
+          .map((storage) => ({
+            id: storage.id,
+            name: storage.name,
+          })),
+        'name',
+      ),
     };
   }
 
@@ -1046,10 +1064,29 @@ class ProductService {
           ...this.#activeGalleryInclude,
           take: 1,
         },
-        colors: { ...this.#activeColorInclude, select: { colorId: true } },
+        colors: {
+          ...this.#activeColorInclude,
+          select: {
+            colorId: true,
+            color: { select: { id: true, name: true, hexCode: true } },
+          },
+        },
         storageOptions: {
           ...this.#activeStorageInclude,
-          select: { storageOptionId: true, stockQuantity: true, price: true, compareAtPrice: true },
+          select: {
+            storageOptionId: true,
+            stockQuantity: true,
+            price: true,
+            compareAtPrice: true,
+            storageOption: { select: { id: true, name: true } },
+          },
+        },
+        variantStocks: {
+          select: {
+            colorId: true,
+            storageOptionId: true,
+            stockQuantity: true,
+          },
         },
       },
     }),
