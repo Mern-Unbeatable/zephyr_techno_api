@@ -1,5 +1,6 @@
 import prisma from "../utils/prisma.js";
 import AppError from "../utils/app-error.js";
+import Mailer from "../utils/mailer.js";
 import { buildImageUrl, resolveProductThumbnail } from "../utils/url.js";
 import promoService from "./promo.service.js";
 import { resolveVariantStock, resolveStoragePrice, syncProductStockTotal } from "../utils/stock.js";
@@ -9,6 +10,10 @@ import { resolveVariantStock, resolveStoragePrice, syncProductStockTotal } from 
  * Handles order creation and management
  */
 class OrderService {
+  constructor(mailer = new Mailer()) {
+    this.mailer = mailer;
+  }
+
   #galleryInclude = {
     where: { isDeleted: false },
     orderBy: { displayOrder: 'asc' },
@@ -792,7 +797,31 @@ class OrderService {
       });
     });
 
+    this.#sendOrderEmails(order, stripeShippingAddress);
+
     return this.#formatOrder(order, true);
+  }
+
+  #sendOrderEmails(order, stripeShippingAddress = null) {
+    const customerEmail =
+      order.user?.email ||
+      order.guestEmail ||
+      stripeShippingAddress?.email ||
+      null;
+
+    if (customerEmail) {
+      this.mailer
+        .sendOrderConfirmation({
+          to: customerEmail,
+          recipientName: order.address?.fullName,
+          order,
+        })
+        .catch((err) => console.error('[Mailer] Failed to send order confirmation:', err));
+    }
+
+    this.mailer
+      .sendNewOrderNotification({ order, customerEmail })
+      .catch((err) => console.error('[Mailer] Failed to send new order notification:', err));
   }
 
   /**
