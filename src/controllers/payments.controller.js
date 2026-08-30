@@ -87,7 +87,8 @@ class PaymentsController {
     if (!publishableKey) {
       return res.status(503).json({ success: false, message: 'Stripe publishable key not configured' });
     }
-    res.status(200).json({ success: true, data: { publishableKey } });
+    const mode = String(publishableKey).startsWith('pk_live_') ? 'live' : 'test';
+    res.status(200).json({ success: true, data: { publishableKey, mode } });
   });
 
   createExpressPaymentIntent = asyncHandler(async (req, res) => {

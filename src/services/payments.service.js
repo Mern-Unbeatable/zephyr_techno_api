@@ -189,6 +189,50 @@ class PaymentsService {
     return PLACEHOLDER_SHIPPING;
   }
 
+  async #orderAllowsExpressDelivery(orderId) {
+    const items = await prisma.orderItem.findMany({
+      where: { orderId },
+      select: { productId: true, colorId: true, storageOptionId: true },
+    });
+    if (!items.length) return true;
+
+    const variants = await prisma.productVariantStock.findMany({
+      where: {
+        OR: items.map((item) => ({
+          productId: item.productId,
+          colorId: item.colorId,
+          storageOptionId: item.storageOptionId,
+        })),
+      },
+      select: {
+        productId: true,
+        colorId: true,
+        storageOptionId: true,
+        expressDeliveryEnabled: true,
+      },
+    });
+
+    const byKey = new Map(
+      variants.map((row) => [
+        `${row.productId}::${row.colorId}::${row.storageOptionId}`,
+        row.expressDeliveryEnabled !== false,
+      ]),
+    );
+
+    return items.every((item) => {
+      const key = `${item.productId}::${item.colorId}::${item.storageOptionId}`;
+      return byKey.has(key) ? byKey.get(key) : true;
+    });
+  }
+
+  async #checkoutShippingOptions(orderId) {
+    const allowExpress = await this.#orderAllowsExpressDelivery(orderId);
+    if (allowExpress) return CHECKOUT_SHIPPING_OPTIONS;
+    return CHECKOUT_SHIPPING_OPTIONS.filter(
+      (option) => option.shipping_rate_data.display_name !== 'Express Delivery',
+    );
+  }
+
   async createCheckoutSession(
     userId,
     guestSessionId,
@@ -271,7 +315,7 @@ class PaymentsService {
       },
       phone_number_collection: { enabled: true },
       allow_promotion_codes: true,
-      shipping_options: CHECKOUT_SHIPPING_OPTIONS,
+      shipping_options: await this.#checkoutShippingOptions(order.id),
       line_items,
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -432,6 +476,24 @@ class PaymentsService {
 
     if (!directProduct?.productId) {
       throw new Error('directProduct with productId is required');
+    }
+
+    if (
+      String(shippingMethod || '').toLowerCase().includes('express') ||
+      Number(shippingCost) >= 15
+    ) {
+      const variant = await prisma.productVariantStock.findFirst({
+        where: {
+          productId: directProduct.productId,
+          colorId: directProduct.colorId,
+          storageOptionId: directProduct.storageOptionId,
+        },
+        select: { expressDeliveryEnabled: true },
+      });
+      if (variant && variant.expressDeliveryEnabled === false) {
+        shippingMethod = 'Standard Delivery';
+        shippingCost = 0;
+      }
     }
 
     await orderService.abandonOpenUnpaidCheckouts({

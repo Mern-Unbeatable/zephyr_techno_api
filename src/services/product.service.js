@@ -239,6 +239,38 @@ class ProductService {
     return stockMap;
   }
 
+  #parseVariantExpressMap(raw, colorIds, storageIds) {
+    const expressMap = new Map();
+    if (!colorIds?.length || !storageIds?.length) return expressMap;
+
+    let entries = raw;
+    if (typeof entries === 'string') {
+      try {
+        entries = this.#parseJsonField(entries, 'variantStocks');
+      } catch {
+        return expressMap;
+      }
+    }
+    if (!Array.isArray(entries)) return expressMap;
+
+    const colorSet = new Set(colorIds);
+    const storageSet = new Set(storageIds);
+    for (const entry of entries) {
+      const colorId = entry?.colorId;
+      const storageOptionId = entry?.storageOptionId;
+      if (!colorId || !storageOptionId) continue;
+      if (!colorSet.has(colorId) || !storageSet.has(storageOptionId)) continue;
+      if (entry.expressDeliveryEnabled === undefined) continue;
+      const enabled =
+        entry.expressDeliveryEnabled === true ||
+        entry.expressDeliveryEnabled === 'true' ||
+        entry.expressDeliveryEnabled === 1 ||
+        entry.expressDeliveryEnabled === '1';
+      expressMap.set(variantStockKey(colorId, storageOptionId), enabled);
+    }
+    return expressMap;
+  }
+
   #aggregateVariantStockMap(stockMap) {
     const byColor = new Map();
     const byStorage = new Map();
@@ -354,7 +386,14 @@ class ProductService {
     );
   }
 
-  async #syncProductVariantStocks(tx, productId, colorIds, storageIds, stockMap) {
+  async #syncProductVariantStocks(
+    tx,
+    productId,
+    colorIds,
+    storageIds,
+    stockMap,
+    expressMap = null,
+  ) {
     const existing = await tx.productVariantStock.findMany({
       where: { productId },
       select: {
@@ -362,6 +401,7 @@ class ProductService {
         colorId: true,
         storageOptionId: true,
         stockQuantity: true,
+        expressDeliveryEnabled: true,
       },
     });
 
@@ -404,10 +444,14 @@ class ProductService {
           const stockQuantity = stockMap.get(key) ?? 0;
           const previousStock = existingStockByKey.get(key) ?? 0;
           const current = existingByKey.get(key);
+          const expressDeliveryEnabled = expressMap?.has(key)
+            ? Boolean(expressMap.get(key))
+            : current?.expressDeliveryEnabled !== false;
+
           if (current) {
             await tx.productVariantStock.update({
               where: { id: current.id },
-              data: { stockQuantity },
+              data: { stockQuantity, expressDeliveryEnabled },
             });
           } else {
             await tx.productVariantStock.create({
@@ -416,6 +460,7 @@ class ProductService {
                 colorId,
                 storageOptionId,
                 stockQuantity,
+                expressDeliveryEnabled,
               },
             });
           }
@@ -532,11 +577,15 @@ class ProductService {
       images: this.#formatProductGallery(galleries),
 
       // FAQs - clean
-      faqs: (product.productFaqs || []).map((f) => ({
-        id: f.id,
-        question: f.question,
-        answer: f.answer,
-      })),
+      faqs: (product.productFaqs || [])
+        .slice()
+        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
+        .map((f) => ({
+          id: f.id,
+          question: f.question,
+          answer: f.answer,
+          displayOrder: f.displayOrder ?? 0,
+        })),
 
       // Highlights & Specifications
       highlights: (product.highlights || []).map((h) => ({
@@ -586,6 +635,7 @@ class ProductService {
         colorId: vs.colorId,
         storageOptionId: vs.storageOptionId,
         stockQuantity: vs.stockQuantity ?? 0,
+        expressDeliveryEnabled: vs.expressDeliveryEnabled !== false,
       })),
     };
   }
@@ -595,10 +645,22 @@ class ProductService {
    * Returns only what is needed to render a product card.
    */
   #formatProductCard(product) {
-    // First image as thumbnail
-    const thumbnail = product.productGalleries?.[0]
-      ? buildImageUrl(product.productGalleries[0].imageUrl)
+    // First image as thumbnail; also build per-colour thumbs from gallery
+    const galleries = product.productGalleries || [];
+    const thumbnail = galleries[0]
+      ? buildImageUrl(galleries[0].imageUrl)
       : null;
+
+    const colorThumbnails = [];
+    const seenColorThumbs = new Set();
+    for (const gallery of galleries) {
+      if (!gallery.colorId || seenColorThumbs.has(gallery.colorId)) continue;
+      seenColorThumbs.add(gallery.colorId);
+      colorThumbnails.push({
+        colorId: gallery.colorId,
+        imageUrl: buildImageUrl(gallery.imageUrl),
+      });
+    }
 
     const productRrp =
       product.compareAtPrice != null ? parseFloat(product.compareAtPrice) : null;
@@ -630,6 +692,7 @@ class ProductService {
         0,
       listingStatus: product.listingStatus,
       thumbnail,
+      colorThumbnails,
       category: product.category
         ? { id: product.category.id, name: product.category.name }
         : null,
@@ -657,14 +720,34 @@ class ProductService {
         })),
       availableStorageOptions: sortStorageOptionsBySize(
         (product.storageOptions || [])
-          .map((ps) => ps.storageOption)
-          .filter(Boolean)
-          .map((storage) => ({
-            id: storage.id,
-            name: storage.name,
-          })),
+          .map((ps) => ({
+            id: ps.storageOption?.id,
+            name: ps.storageOption?.name,
+            price:
+              ps.price != null
+                ? parseFloat(ps.price)
+                : product.basePrice != null
+                  ? parseFloat(product.basePrice)
+                  : null,
+            compareAtPrice:
+              ps.compareAtPrice != null
+                ? parseFloat(ps.compareAtPrice)
+                : productRrp > 0
+                  ? productRrp
+                  : null,
+          }))
+          .filter((storage) => storage.id && storage.name),
         'name',
       ),
+      availableVariantStocks: (product.variantStocks || []).map((vs) => ({
+        colorId: vs.colorId,
+        storageOptionId: vs.storageOptionId,
+        stockQuantity: vs.stockQuantity ?? 0,
+        expressDeliveryEnabled:
+          vs.expressDeliveryEnabled !== undefined
+            ? Boolean(vs.expressDeliveryEnabled)
+            : true,
+      })),
     };
   }
 
@@ -731,9 +814,13 @@ class ProductService {
       try {
         const parsedFaqs = typeof faqs === "string" ? JSON.parse(faqs) : faqs;
         if (Array.isArray(parsedFaqs)) {
-          productFaqs = parsedFaqs.map((faq) => ({
+          productFaqs = parsedFaqs.map((faq, index) => ({
             question: faq.question,
             answer: faq.answer,
+            displayOrder:
+              Number.isFinite(Number(faq.displayOrder))
+                ? Number(faq.displayOrder)
+                : index,
           }));
         }
       } catch (err) {
@@ -855,6 +942,11 @@ class ProductService {
       storages,
       { colorStockMap, storageVariantMap },
     );
+    const variantExpressMap = this.#parseVariantExpressMap(
+      data.variantStocks,
+      colors,
+      storages,
+    );
     const { total: totalStock, byColor, byStorage } =
       this.#aggregateVariantStockMap(variantStockMap);
 
@@ -959,7 +1051,14 @@ class ProductService {
                 variantStocks: {
                   create: [...variantStockMap.entries()].map(([key, stockQuantity]) => {
                     const [colorId, storageOptionId] = key.split('::');
-                    return { colorId, storageOptionId, stockQuantity };
+                    return {
+                      colorId,
+                      storageOptionId,
+                      stockQuantity,
+                      expressDeliveryEnabled: variantExpressMap.has(key)
+                        ? Boolean(variantExpressMap.get(key))
+                        : true,
+                    };
                   }),
                 },
               }
@@ -1116,7 +1215,12 @@ class ProductService {
         condition: { select: { id: true, name: true } },
         productGalleries: {
           ...this.#activeGalleryInclude,
-          take: 1,
+          select: {
+            imageUrl: true,
+            colorId: true,
+            displayOrder: true,
+          },
+          orderBy: { displayOrder: 'asc' },
         },
         colors: {
           ...this.#activeColorInclude,
@@ -1140,6 +1244,7 @@ class ProductService {
             colorId: true,
             storageOptionId: true,
             stockQuantity: true,
+            expressDeliveryEnabled: true,
           },
         },
       },
@@ -1187,6 +1292,7 @@ class ProductService {
             colorId: true,
             storageOptionId: true,
             stockQuantity: true,
+            expressDeliveryEnabled: true,
           },
         },
       },
@@ -1423,9 +1529,13 @@ class ProductService {
     if (parsedFaqs && Array.isArray(parsedFaqs)) {
       updateData.productFaqs = {
         deleteMany: {},
-        create: parsedFaqs.map((faq) => ({
+        create: parsedFaqs.map((faq, index) => ({
           question: faq.question,
           answer: faq.answer,
+          displayOrder:
+            Number.isFinite(Number(faq.displayOrder))
+              ? Number(faq.displayOrder)
+              : index,
         })),
       };
     }
@@ -1637,6 +1747,11 @@ class ProductService {
           colorIds: colorIdsForVariants,
           storageIds: storageIdsForVariants,
           stockMap,
+          expressMap: this.#parseVariantExpressMap(
+            data.variantStocks,
+            colorIdsForVariants,
+            storageIdsForVariants,
+          ),
         };
       }
     }
@@ -1690,6 +1805,7 @@ class ProductService {
           variantStocksSync.colorIds,
           variantStocksSync.storageIds,
           variantStocksSync.stockMap,
+          variantStocksSync.expressMap,
         );
       }
 
