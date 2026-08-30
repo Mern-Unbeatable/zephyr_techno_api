@@ -22,6 +22,7 @@ import { adminRouter as adminOrderRoutes } from './routes/orders.routes.js';
 import { adminRouter as adminUsersRoutes } from './routes/users.routes.js';
 import sellRoutes, { adminRouter as adminSellRoutes } from './routes/sell.routes.js';
 import newsletterRoutes from './routes/newsletter.routes.js';
+import stockNotificationRoutes, { adminRouter as adminStockNotificationRoutes } from './routes/stock-notification.routes.js';
 import env from './config/env.js';
 
 const app = express();
@@ -112,6 +113,8 @@ app.use('/api/public/product', publicProductRoutes);
 app.get('/api/public/stripe-config', paymentsController.getStripeConfig);
 app.use('/api/public/business-form', businessRoutes);
 app.use('/api/public/newsletter', newsletterRoutes);
+app.use('/api/public/stock-notifications', stockNotificationRoutes);
+app.use('/api/admin/stock-notifications', adminStockNotificationRoutes);
 app.use('/api/sell', sellRoutes);
 
 // 404 — catch all undefined routes

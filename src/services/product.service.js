@@ -8,6 +8,7 @@ import {
   sortStorageOptionsBySize,
   variantStockKey,
 } from "../utils/stock.js";
+import stockNotificationService from "./stock-notification.service.js";
 
 class ProductService {
   #activeGalleryInclude = {
@@ -356,8 +357,20 @@ class ProductService {
   async #syncProductVariantStocks(tx, productId, colorIds, storageIds, stockMap) {
     const existing = await tx.productVariantStock.findMany({
       where: { productId },
-      select: { id: true, colorId: true, storageOptionId: true },
+      select: {
+        id: true,
+        colorId: true,
+        storageOptionId: true,
+        stockQuantity: true,
+      },
     });
+
+    const existingStockByKey = new Map(
+      existing.map((row) => [
+        variantStockKey(row.colorId, row.storageOptionId),
+        Number(row.stockQuantity) || 0,
+      ]),
+    );
 
     const targetKeys = new Set();
     for (const colorId of colorIds) {
@@ -382,30 +395,39 @@ class ProductService {
       ]),
     );
 
+    const restockedVariants = [];
+
     await Promise.all(
       colorIds.flatMap((colorId) =>
         storageIds.map(async (storageOptionId) => {
           const key = variantStockKey(colorId, storageOptionId);
           const stockQuantity = stockMap.get(key) ?? 0;
+          const previousStock = existingStockByKey.get(key) ?? 0;
           const current = existingByKey.get(key);
           if (current) {
             await tx.productVariantStock.update({
               where: { id: current.id },
               data: { stockQuantity },
             });
-            return;
+          } else {
+            await tx.productVariantStock.create({
+              data: {
+                productId,
+                colorId,
+                storageOptionId,
+                stockQuantity,
+              },
+            });
           }
-          await tx.productVariantStock.create({
-            data: {
-              productId,
-              colorId,
-              storageOptionId,
-              stockQuantity,
-            },
-          });
+
+          if (previousStock <= 0 && stockQuantity > 0) {
+            restockedVariants.push({ colorId, storageOptionId });
+          }
         }),
       ),
     );
+
+    return restockedVariants;
   }
 
   #parseJsonField(val, fieldName) {
@@ -1550,6 +1572,8 @@ class ProductService {
     }
 
     const updatedProduct = await prisma.$transaction(async (tx) => {
+      let restockedVariants = [];
+
       if (colorOptionsSync) {
         await this.#syncProductColorOptions(
           tx,
@@ -1569,7 +1593,7 @@ class ProductService {
       }
 
       if (variantStocksSync) {
-        await this.#syncProductVariantStocks(
+        restockedVariants = await this.#syncProductVariantStocks(
           tx,
           id,
           variantStocksSync.colorIds,
@@ -1676,13 +1700,16 @@ class ProductService {
         );
       }
 
-      return await tx.product.update({
-        where: { id },
-        data: updateData,
-        select: {
-          id: true,
-        },
-      });
+      return {
+        product: await tx.product.update({
+          where: { id },
+          data: updateData,
+          select: {
+            id: true,
+          },
+        }),
+        restockedVariants,
+      };
     }, this.#transactionOptions).catch((error) => {
       // Handle Prisma P2025 error (Record not found)
       if (error.code === 'P2025') {
@@ -1691,7 +1718,13 @@ class ProductService {
       throw error;
     });
 
-    return updatedProduct;
+    if (updatedProduct.restockedVariants?.length) {
+      stockNotificationService
+        .notifyRestockedVariants(id, updatedProduct.restockedVariants)
+        .catch((err) => console.error('[StockNotification] Restock notify failed:', err));
+    }
+
+    return updatedProduct.product;
   }
 
   /**

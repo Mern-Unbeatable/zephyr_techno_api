@@ -37,6 +37,7 @@ const env = {
   mailFrom: process.env.MAIL_FROM || process.env.MAIL_USER,
   newsletterNotifyEmail: process.env.NEWSLETTER_NOTIFY_EMAIL,
   orderNotifyEmail: process.env.ORDER_NOTIFY_EMAIL,
+  frontendUrl: process.env.FRONTEND_URL || 'https://www.zephyrtechnology.co.uk',
   signatureImageBaseUrl: process.env.SIGNATURE_IMAGE_BASE_URL || process.env.LIVE_URL || '',
 };
 

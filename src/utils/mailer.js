@@ -273,6 +273,51 @@ class Mailer {
     });
   }
 
+  async sendBackInStockNotification({ notification }) {
+    const productTitle = this.#escapeHtml(notification.product?.title || 'Product');
+    const colorName = this.#escapeHtml(notification.color?.name || '');
+    const storageName = this.#escapeHtml(notification.storageOption?.name || '');
+    const variantLabel = [colorName, storageName].filter(Boolean).join(' · ');
+    const productUrl = `${env.frontendUrl}/product-details/${notification.productId}`;
+
+    const body = `
+      <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.6;color:#374151;">
+        <h2 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#052041;">Back in Stock</h2>
+        <p style="margin:0 0 12px;">Good news — the item you asked about is available again.</p>
+        <p style="margin:0 0 8px;"><strong style="color:#052041;">Product:</strong> ${productTitle}</p>
+        ${variantLabel ? `<p style="margin:0 0 16px;"><strong style="color:#052041;">Variant:</strong> ${variantLabel}</p>` : ''}
+        <p style="margin:0 0 20px;">
+          <a href="${productUrl}" style="display:inline-block;padding:12px 20px;background:#1FA3C2;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">
+            View Product
+          </a>
+        </p>
+      </div>
+      <div style="margin-top:28px;padding-top:20px;border-top:1px solid #E5E7EB;">
+        ${buildEmailSignature()}
+      </div>
+    `;
+
+    const text = [
+      'Back in Stock',
+      '',
+      'Good news — the item you asked about is available again.',
+      '',
+      `Product: ${notification.product?.title || 'Product'}`,
+      variantLabel ? `Variant: ${variantLabel}` : null,
+      `View product: ${productUrl}`,
+      '',
+      '— Zephyr Technology',
+    ].filter(Boolean).join('\n');
+
+    return this.#sendMail({
+      to: notification.email,
+      subject: `${notification.product?.title || 'Product'} is back in stock`,
+      html: this.#wrapPlainHtml(body),
+      text,
+      attachments: getSignatureIconAttachments(),
+    });
+  }
+
   async sendNewsletterSubscriptionNotification({ subscriberEmail }) {
     const safeEmail = String(subscriberEmail)
       .replace(/&/g, '&amp;')

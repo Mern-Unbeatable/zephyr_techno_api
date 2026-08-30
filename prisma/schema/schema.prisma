@@ -107,6 +107,7 @@ model User {
   orders        Order[]
   reviews       Review[]
   sellRequests  SellRequest[]
+  stockNotifications StockNotification[]
   isDeleted     Boolean       @default(false)
   deletedAt     DateTime?
 }
@@ -218,6 +219,7 @@ model Color {
   cartItems        CartItem[]
   orderItems       OrderItem[]
   variantStocks    ProductVariantStock[]
+  stockNotifications StockNotification[]
   isDeleted        Boolean               @default(false)
   deletedAt        DateTime?
 }
@@ -231,6 +233,7 @@ model StorageOption {
   conditionModelPrices ConditionModelPrice[]
   sellRequests         SellRequest[]
   variantStocks        ProductVariantStock[]
+  stockNotifications   StockNotification[]
   isDeleted            Boolean                @default(false)
   deletedAt            DateTime?
 }
@@ -275,6 +278,7 @@ model Product {
   variantStocks    ProductVariantStock[]
   cartItems        CartItem[]
   orderItems       OrderItem[]
+  stockNotifications StockNotification[]
   isDeleted        Boolean                @default(false)
   deletedAt        DateTime?
 
@@ -520,6 +524,27 @@ model OrderItem {
 
   @@index([orderId])
   @@index([productId])
+}
+
+model StockNotification {
+  id              String    @id @default(uuid())
+  productId       String
+  colorId         String
+  storageOptionId String
+  email           String
+  userId          String?
+  notifiedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  product       Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color         Color         @relation(fields: [colorId], references: [id])
+  storageOption StorageOption @relation(fields: [storageOptionId], references: [id])
+  user          User?         @relation(fields: [userId], references: [id])
+
+  @@unique([productId, colorId, storageOptionId, email])
+  @@index([productId, colorId, storageOptionId, notifiedAt])
+  @@index([email])
 }
 
 // =====================================================================================

@@ -28,7 +28,7 @@ const basePrisma = new PrismaClient({
 });
 
 /** Models without soft-delete columns — skip the global isDeleted filter / soft delete. */
-const HARD_DELETE_MODELS = new Set(['ProductVariantStock']);
+const HARD_DELETE_MODELS = new Set(['ProductVariantStock', 'StockNotification']);
 
 const prisma = basePrisma.$extends({
   query: {
