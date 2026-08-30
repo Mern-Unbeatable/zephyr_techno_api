@@ -189,48 +189,81 @@ class PaymentsService {
     return PLACEHOLDER_SHIPPING;
   }
 
-  async #orderAllowsExpressDelivery(orderId) {
-    const items = await prisma.orderItem.findMany({
-      where: { orderId },
-      select: { productId: true, colorId: true, storageOptionId: true },
-    });
-    if (!items.length) return true;
+  async #variantAllowsExpressDelivery(productId, colorId, storageOptionId) {
+    if (!productId || !colorId || !storageOptionId) return true;
 
-    const variants = await prisma.productVariantStock.findMany({
+    const row = await prisma.productVariantStock.findUnique({
       where: {
-        OR: items.map((item) => ({
-          productId: item.productId,
-          colorId: item.colorId,
-          storageOptionId: item.storageOptionId,
-        })),
+        productId_colorId_storageOptionId: {
+          productId,
+          colorId,
+          storageOptionId,
+        },
       },
-      select: {
-        productId: true,
-        colorId: true,
-        storageOptionId: true,
-        expressDeliveryEnabled: true,
-      },
+      select: { expressDeliveryEnabled: true },
     });
 
-    const byKey = new Map(
-      variants.map((row) => [
-        `${row.productId}::${row.colorId}::${row.storageOptionId}`,
-        row.expressDeliveryEnabled !== false,
-      ]),
-    );
+    if (!row) {
+      const fallback = await prisma.productVariantStock.findFirst({
+        where: { productId, colorId, storageOptionId },
+        select: { expressDeliveryEnabled: true },
+      });
+      if (!fallback) return true;
+      return fallback.expressDeliveryEnabled !== false;
+    }
 
-    return items.every((item) => {
-      const key = `${item.productId}::${item.colorId}::${item.storageOptionId}`;
-      return byKey.has(key) ? byKey.get(key) : true;
-    });
+    return row.expressDeliveryEnabled !== false;
   }
 
-  async #checkoutShippingOptions(orderId) {
-    const allowExpress = await this.#orderAllowsExpressDelivery(orderId);
+  async #orderAllowsExpressDelivery(orderId, directProduct = null) {
+    const lines = [];
+
+    if (directProduct?.productId) {
+      lines.push({
+        productId: directProduct.productId,
+        colorId: directProduct.colorId || null,
+        storageOptionId: directProduct.storageOptionId || null,
+      });
+    }
+
+    if (orderId) {
+      const items = await prisma.orderItem.findMany({
+        where: { orderId },
+        select: { productId: true, colorId: true, storageOptionId: true },
+      });
+      for (const item of items) {
+        const exists = lines.some(
+          (line) =>
+            line.productId === item.productId &&
+            line.colorId === item.colorId &&
+            line.storageOptionId === item.storageOptionId,
+        );
+        if (!exists) lines.push(item);
+      }
+    }
+
+    if (!lines.length) return true;
+
+    for (const line of lines) {
+      const allowed = await this.#variantAllowsExpressDelivery(
+        line.productId,
+        line.colorId,
+        line.storageOptionId,
+      );
+      if (!allowed) {
+        console.log('[Stripe] Express Delivery hidden — variant flag is off', line);
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  async #checkoutShippingOptions(orderId, directProduct = null) {
+    const allowExpress = await this.#orderAllowsExpressDelivery(orderId, directProduct);
+    console.log('[Stripe] Express Delivery option:', allowExpress ? 'shown' : 'hidden');
     if (allowExpress) return CHECKOUT_SHIPPING_OPTIONS;
-    return CHECKOUT_SHIPPING_OPTIONS.filter(
-      (option) => option.shipping_rate_data.display_name !== 'Express Delivery',
-    );
+    return CHECKOUT_SHIPPING_OPTIONS.slice(0, 1);
   }
 
   async createCheckoutSession(
@@ -315,7 +348,7 @@ class PaymentsService {
       },
       phone_number_collection: { enabled: true },
       allow_promotion_codes: true,
-      shipping_options: await this.#checkoutShippingOptions(order.id),
+      shipping_options: await this.#checkoutShippingOptions(order.id, directProduct),
       line_items,
       success_url: successUrl,
       cancel_url: cancelUrl,
