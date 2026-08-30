@@ -633,6 +633,7 @@ class AttributesService {
       categories: categories,
       conditions: conditions,
       series: opts.series || [],
+      models: opts.models || [],
       colors: opts.colors || [],
       storageOptions: opts.storageOptions || [],
     };

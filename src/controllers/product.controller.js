@@ -12,7 +12,11 @@ class ProductController {
   });
 
   getAllProducts = asyncHandler(async (req, res) => {
-    const data = await productService.getAllProducts(req.query);
+    const isPublic = req.baseUrl.includes('/api/public');
+    const query = isPublic
+      ? { listingStatus: 'ACTIVE', ...req.query }
+      : req.query;
+    const data = await productService.getAllProducts(query);
     res.status(200).json({ success: true, data });
   });
 

@@ -1014,10 +1014,64 @@ class ProductService {
       if (priceMax !== undefined) where.basePrice.lte = Number(priceMax);
     }
     if (search) {
-      where.OR = [
-        { title: { contains: String(search), mode: 'insensitive' } },
-        { description: { contains: String(search), mode: 'insensitive' } },
+      const term = String(search).trim();
+      const nameFilter = { contains: term, mode: 'insensitive' };
+
+      // Resolve attribute matches first so "128", "Black", "iPhone 15 Pro" find products
+      // via their color / storage / model / series relations — not title text alone.
+      const [matchedColors, matchedStorages, matchedModels, matchedSeries] =
+        await Promise.all([
+          prisma.color.findMany({
+            where: { name: nameFilter },
+            select: { id: true },
+          }),
+          prisma.storageOption.findMany({
+            where: { name: nameFilter },
+            select: { id: true },
+          }),
+          prisma.deviceModel.findMany({
+            where: { name: nameFilter },
+            select: { id: true },
+          }),
+          prisma.series.findMany({
+            where: { name: nameFilter },
+            select: { id: true },
+          }),
+        ]);
+
+      const or = [
+        { title: nameFilter },
+        { description: nameFilter },
       ];
+
+      if (matchedModels.length) {
+        or.push({ deviceModelId: { in: matchedModels.map((m) => m.id) } });
+      }
+      if (matchedSeries.length) {
+        or.push({ seriesId: { in: matchedSeries.map((s) => s.id) } });
+      }
+      if (matchedColors.length) {
+        or.push({
+          colors: {
+            some: {
+              isDeleted: false,
+              colorId: { in: matchedColors.map((c) => c.id) },
+            },
+          },
+        });
+      }
+      if (matchedStorages.length) {
+        or.push({
+          storageOptions: {
+            some: {
+              isDeleted: false,
+              storageOptionId: { in: matchedStorages.map((s) => s.id) },
+            },
+          },
+        });
+      }
+
+      where.OR = or;
     }
 
     // Build relation filters for options
