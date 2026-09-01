@@ -8,3 +8,6 @@ app.listen(PORT, () => {
   console.log(`Server running in ${env.nodeEnv} mode on port ${PORT}`);
   paymentsService.registerPaymentMethodDomains();
 });
+
+
+
