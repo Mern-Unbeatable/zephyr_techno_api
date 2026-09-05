@@ -83,54 +83,59 @@ function getStripePublishableKey() {
 function mapPaymentIntentShipping(paymentIntent) {
   const shipping = paymentIntent.shipping || {};
   const addr = shipping.address || {};
+  const paymentMethodShipping = paymentIntent.payment_method?.shipping || {};
+  const pmAddr = paymentMethodShipping.address || {};
   const billing =
     paymentIntent.latest_charge?.billing_details ||
     paymentIntent.charges?.data?.[0]?.billing_details ||
     {};
 
-  const line1 = addr.line1;
-  const line2 = addr.line2;
-  const street = [line1, line2].filter(Boolean).join(', ');
-
-  if (!shipping.name && !street && !billing.name) return null;
-
-  return {
-    email: billing.email || paymentIntent.receipt_email || null,
-    fullName: shipping.name || billing.name || 'Customer',
-    phone: billing.phone || null,
-    street: street || PLACEHOLDER_SHIPPING.street,
-    city: addr.city || PLACEHOLDER_SHIPPING.city,
-    state: addr.state || null,
-    zipCode: addr.postal_code || PLACEHOLDER_SHIPPING.zipCode,
-    country: mapCountry(addr.country),
-  };
-}
-
-
-function mapStripeCollectedAddress(session) {
-  const shipping = session.shipping_details || session.shipping || {};
-  const addr = shipping.address || session.collected_information?.shipping_details?.address || {};
-  const billing = session.customer_details?.address || {};
-  const use = addr.line1 ? addr : billing;
-  const name =
-    shipping.name ||
-    session.collected_information?.shipping_details?.name ||
-    session.customer_details?.name;
-  const line1 = use.line1;
-  const line2 = use.line2;
+  const name = shipping.name || paymentMethodShipping.name || billing.name || null;
+  const line1 = addr.line1 || pmAddr.line1;
+  const line2 = addr.line2 || pmAddr.line2;
   const street = [line1, line2].filter(Boolean).join(', ');
 
   if (!name && !street) return null;
 
   return {
+    email: billing.email || paymentIntent.receipt_email || null,
+    fullName: name,
+    phone: billing.phone || paymentMethodShipping.phone || null,
+    street: street,
+    city: addr.city || pmAddr.city,
+    state: addr.state || pmAddr.state || null,
+    zipCode: addr.postal_code || pmAddr.postal_code,
+    country: mapCountry(addr.country || pmAddr.country),
+  };
+}
+
+
+function mapStripeCollectedAddress(session) {
+  const collectedShipping = session.collected_information?.shipping_details || null;
+  const legacyShipping = session.shipping_details || session.shipping || {};
+  const shipping = collectedShipping || legacyShipping;
+  const addr = shipping?.address || {};
+  const name = shipping?.name || session.customer_details?.name || null;
+  const street = [addr.line1, addr.line2].filter(Boolean).join(', ');
+
+  if (!name && !street) {
+    console.error('[Stripe] No shipping name or street in session', {
+      hasCollectedInformation: Boolean(collectedShipping),
+      hasLegacyShipping: Boolean(legacyShipping?.address),
+      customerDetails: session.customer_details,
+    });
+    return null;
+  }
+
+  return {
     email: session.customer_details?.email || session.customer_email || null,
-    fullName: name || 'Customer',
-    phone: session.customer_details?.phone || shipping.phone || null,
-    street: street || PLACEHOLDER_SHIPPING.street,
-    city: use.city || PLACEHOLDER_SHIPPING.city,
-    state: use.state || null,
-    zipCode: use.postal_code || PLACEHOLDER_SHIPPING.zipCode,
-    country: mapCountry(use.country),
+    fullName: name,
+    phone: session.customer_details?.phone || shipping?.phone || null,
+    street: street,
+    city: addr.city,
+    state: addr.state || null,
+    zipCode: addr.postal_code,
+    country: mapCountry(addr.country),
   };
 }
 
@@ -377,7 +382,7 @@ class PaymentsService {
     if (!this.stripe) throw new Error('Stripe not configured. Set STRIPE_SECRET env var.');
 
     const session = await this.stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ['shipping_cost.shipping_rate'],
+      expand: ['collected_information', 'shipping_cost.shipping_rate'],
     });
     if (!session) throw new Error('Checkout session not found');
 
@@ -394,6 +399,11 @@ class PaymentsService {
     if (!orderId) throw new Error('Order id missing from session metadata');
 
     const stripeShippingAddress = mapStripeCollectedAddress(session);
+    if (!stripeShippingAddress) {
+      await orderService.abandonUnpaidOrder(orderId, 'Stripe checkout session missing shipping address');
+      throw new Error('Checkout session is missing shipping address. Order abandoned.');
+    }
+
     const updatedOrder = await orderService.confirmPayment(
       orderId,
       'PROCESSING',
@@ -597,7 +607,7 @@ class PaymentsService {
     if (!this.stripe) throw new Error('Stripe not configured. Set STRIPE_SECRET env var.');
 
     const paymentIntent = await this.stripe.paymentIntents.retrieve(paymentIntentId, {
-      expand: ['latest_charge'],
+      expand: ['latest_charge', 'payment_method'],
     });
 
     if (!paymentIntent) throw new Error('Payment intent not found');
@@ -621,6 +631,11 @@ class PaymentsService {
     if (!orderId) throw new Error('Order id missing from payment intent metadata');
 
     const stripeShippingAddress = mapPaymentIntentShipping(paymentIntent);
+    if (!stripeShippingAddress) {
+      await orderService.abandonUnpaidOrder(orderId, 'Express payment intent missing shipping address');
+      throw new Error('Payment intent is missing shipping address. Order abandoned.');
+    }
+
     const updatedOrder = await orderService.confirmPayment(
       orderId,
       'PROCESSING',
