@@ -652,7 +652,8 @@ class OrderService {
       return this.#formatOrder(existing, true);
     }
 
-    const order = await prisma.$transaction(async (tx) => {
+    const order = await prisma.$transaction(
+      async (tx) => {
       // Re-check stock at payment confirmation time.
       for (const item of existing.orderItems) {
         const product = await tx.product.findUnique({
@@ -795,7 +796,9 @@ class OrderService {
           },
         },
       });
-    });
+    },
+    { maxWait: 10000, timeout: 30000 }
+  );
 
     this.#sendOrderEmails(order, stripeShippingAddress);
 
