@@ -80,20 +80,6 @@ function getStripePublishableKey() {
   return entry?.[1] || null;
 }
 
-function isPlaceholderShipping(address) {
-  if (!address) return true;
-  const street = String(address.street || '').trim().toLowerCase();
-  const city = String(address.city || '').trim().toLowerCase();
-  const fullName = String(address.fullName || '').trim().toLowerCase();
-  return (
-    street === 'to be confirmed' ||
-    city === 'to be confirmed' ||
-    fullName === 'to be confirmed' ||
-    street === 'tbc' ||
-    !street
-  );
-}
-
 function mapPaymentIntentShipping(paymentIntent) {
   const charge =
     typeof paymentIntent.latest_charge === 'object' && paymentIntent.latest_charge
@@ -113,13 +99,11 @@ function mapPaymentIntentShipping(paymentIntent) {
     paymentMethod?.billing_details ||
     {};
   const billAddr = billing.address || {};
-  const paypalDetails = charge?.payment_method_details?.paypal || {};
 
   const name =
     shipping.name ||
     paymentMethodShipping.name ||
     billing.name ||
-    paypalDetails.payer_name ||
     null;
   const line1 = addr.line1 || pmAddr.line1 || billAddr.line1;
   const line2 = addr.line2 || pmAddr.line2 || billAddr.line2;
@@ -128,15 +112,10 @@ function mapPaymentIntentShipping(paymentIntent) {
   const zipCode = addr.postal_code || pmAddr.postal_code || billAddr.postal_code;
 
   // Prefer real shipping/billing street; never invent an address from name alone.
-  // PayPal/Klarna PaymentIntents often only return payer name/email — not ship-to.
   if (!street && !city && !zipCode) return null;
 
   return {
-    email:
-      billing.email ||
-      paypalDetails.payer_email ||
-      paymentIntent.receipt_email ||
-      null,
+    email: billing.email || paymentIntent.receipt_email || null,
     fullName: name || 'Customer',
     phone: billing.phone || paymentMethodShipping.phone || null,
     street: street || 'Address on file',
@@ -442,15 +421,6 @@ class PaymentsService {
 
     const stripeShippingAddress = mapStripeCollectedAddress(session);
     if (!stripeShippingAddress) {
-      const existing = orderId
-        ? await prisma.order.findUnique({
-            where: { id: orderId },
-            select: { paymentStatus: true },
-          })
-        : null;
-      if (existing?.paymentStatus === 'PAID') {
-        return orderService.getOrderById(orderId, null, true);
-      }
       await orderService.abandonUnpaidOrder(orderId, 'Stripe checkout session missing shipping address');
       throw new Error('Checkout session is missing shipping address. Order abandoned.');
     }
@@ -736,23 +706,6 @@ class PaymentsService {
     }
 
     if (order.paymentStatus === 'PAID') {
-      // Backfill shipping if confirm ran before Stripe address was available.
-      const stripeRef = order.paymentIntentId;
-      if (stripeRef) {
-        try {
-          if (String(stripeRef).startsWith('cs_')) {
-            return await this.confirmCheckoutSession(stripeRef);
-          }
-          if (String(stripeRef).startsWith('pi_')) {
-            return await this.confirmExpressPayment(stripeRef);
-          }
-        } catch (error) {
-          console.warn(
-            `[Stripe] Paid order ${orderId} address backfill skipped:`,
-            error.message,
-          );
-        }
-      }
       return orderService.getOrderById(order.id, null, true);
     }
 

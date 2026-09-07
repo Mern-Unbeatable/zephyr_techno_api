@@ -5,20 +5,6 @@ import { buildImageUrl, resolveProductThumbnail } from "../utils/url.js";
 import promoService from "./promo.service.js";
 import { resolveVariantStock, resolveStoragePrice, syncProductStockTotal, formatStorageLabel } from "../utils/stock.js";
 
-function isPlaceholderShipping(address) {
-  if (!address) return true;
-  const street = String(address.street || "").trim().toLowerCase();
-  const city = String(address.city || "").trim().toLowerCase();
-  const fullName = String(address.fullName || "").trim().toLowerCase();
-  return (
-    street === "to be confirmed" ||
-    city === "to be confirmed" ||
-    fullName === "to be confirmed" ||
-    street === "tbc" ||
-    !street
-  );
-}
-
 /**
  * OrderService
  * Handles order creation and management
@@ -662,29 +648,7 @@ class OrderService {
     }
 
     // Idempotent confirm: avoid double stock/promo/cart mutations.
-    // Still backfill shipping when order was paid with a draft placeholder address.
     if (existing.paymentStatus === 'PAID') {
-      if (stripeShippingAddress?.fullName && isPlaceholderShipping(existing.address)) {
-        await prisma.userAddress.update({
-          where: { id: existing.address.id },
-          data: {
-            fullName: stripeShippingAddress.fullName,
-            phone: stripeShippingAddress.phone || existing.address.phone || null,
-            street: stripeShippingAddress.street || existing.address.street,
-            city: stripeShippingAddress.city || existing.address.city,
-            state: stripeShippingAddress.state || existing.address.state || null,
-            zipCode: stripeShippingAddress.zipCode || existing.address.zipCode,
-            country: stripeShippingAddress.country || existing.address.country,
-          },
-        });
-        if (!existing.userId && stripeShippingAddress?.email) {
-          await prisma.order.update({
-            where: { id: orderId },
-            data: { guestEmail: stripeShippingAddress.email },
-          });
-        }
-        return this.getOrderById(orderId, null, true);
-      }
       return this.#formatOrder(existing, true);
     }
 
