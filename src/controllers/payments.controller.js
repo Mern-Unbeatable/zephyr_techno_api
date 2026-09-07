@@ -20,7 +20,7 @@ class PaymentsController {
       });
     }
 
-    const { shippingAddress, cartItemIds, shippingMethod, shippingCost, promoCode, productId, colorId, storageOptionId, quantity, collectAddressOnStripe } = req.body;
+    const { shippingAddress, cartItemIds, shippingMethod, shippingCost, promoCode, productId, colorId, storageOptionId, quantity, collectAddressOnStripe, paymentMethodTypes } = req.body;
     const collectOnStripe = Boolean(collectAddressOnStripe);
 
     // Guest checkout requires email unless Stripe will collect contact + address
@@ -46,6 +46,10 @@ class PaymentsController {
       };
     }
 
+    const forcedTypes = Array.isArray(paymentMethodTypes)
+      ? paymentMethodTypes.filter((type) => typeof type === 'string' && type.trim())
+      : null;
+
     const { order, sessionUrl, sessionId } = await paymentsService.createCheckoutSession(
       userId,
       guestSessionId,
@@ -57,6 +61,7 @@ class PaymentsController {
       promoCode,
       directProduct,
       collectOnStripe,
+      forcedTypes,
     );
     res.status(201).json({ success: true, data: { orderId: order.id, checkoutUrl: sessionUrl, sessionId } });
   });

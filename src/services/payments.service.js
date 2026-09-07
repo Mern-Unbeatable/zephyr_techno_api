@@ -299,6 +299,7 @@ class PaymentsService {
     promoCode = null,
     directProduct = null,
     collectAddressOnStripe = false,
+    forcedPaymentMethodTypes = null,
   ) {
     if (!this.stripe) throw new Error('Stripe not configured. Set STRIPE_SECRET env var.');
 
@@ -380,7 +381,10 @@ class PaymentsService {
       },
     };
 
-    const session = await this.#createCheckoutSessionWithWallets(sessionConfig);
+    const session = await this.#createCheckoutSessionWithWallets(
+      sessionConfig,
+      forcedPaymentMethodTypes,
+    );
 
     // Persist Stripe session id for cancel / reconcile
     await prisma.order.update({
@@ -443,8 +447,20 @@ class PaymentsService {
     return getStripePublishableKey();
   }
 
-  async #createCheckoutSessionWithWallets(sessionConfig) {
+  async #createCheckoutSessionWithWallets(sessionConfig, forcedPaymentMethodTypes = null) {
     const stripe = this.stripeCheckout || this.stripe;
+    const forced = Array.isArray(forcedPaymentMethodTypes)
+      ? forcedPaymentMethodTypes.filter((type) => typeof type === 'string' && type.trim())
+      : [];
+
+    // Single-method sessions (e.g. Klarna-only) must not enable every wallet.
+    if (forced.length > 0) {
+      return stripe.checkout.sessions.create({
+        ...sessionConfig,
+        payment_method_types: forced,
+      });
+    }
+
     try {
       return await stripe.checkout.sessions.create({
         ...sessionConfig,
