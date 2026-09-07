@@ -812,16 +812,8 @@ class OrderService {
       stripeShippingAddress?.email ||
       null;
 
-    if (customerEmail) {
-      this.mailer
-        .sendOrderConfirmation({
-          to: customerEmail,
-          recipientName: order.address?.fullName,
-          order,
-        })
-        .catch((err) => console.error('[Mailer] Failed to send order confirmation:', err));
-    }
-
+    // Customer receipt email paused until branded template is ready (client request).
+    // Admin new-order notification still sends.
     this.mailer
       .sendNewOrderNotification({ order, customerEmail })
       .catch((err) => console.error('[Mailer] Failed to send new order notification:', err));

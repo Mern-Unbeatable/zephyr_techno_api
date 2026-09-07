@@ -63,12 +63,22 @@ class PaymentsController {
 
   // POST /api/public/product/checkout/confirm
   confirmCheckoutSession = asyncHandler(async (req, res) => {
-    const { sessionId } = req.body;
-    if (!sessionId) return res.status(400).json({ success: false, message: 'sessionId is required' });
+    const { sessionId, orderId } = req.body;
 
-    const order = await paymentsService.confirmCheckoutSession(sessionId);
+    if (sessionId) {
+      const order = await paymentsService.confirmCheckoutSession(sessionId);
+      return res.status(200).json({ success: true, data: order });
+    }
 
-    res.status(200).json({ success: true, data: order });
+    if (orderId) {
+      const order = await paymentsService.confirmPaidOrderByOrderId(orderId);
+      return res.status(200).json({ success: true, data: order });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: 'sessionId or orderId is required',
+    });
   });
 
   // POST /api/public/product/checkout/cancel

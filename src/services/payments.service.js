@@ -81,31 +81,48 @@ function getStripePublishableKey() {
 }
 
 function mapPaymentIntentShipping(paymentIntent) {
-  const shipping = paymentIntent.shipping || {};
+  const charge =
+    typeof paymentIntent.latest_charge === 'object' && paymentIntent.latest_charge
+      ? paymentIntent.latest_charge
+      : paymentIntent.charges?.data?.[0] || null;
+
+  const shipping = paymentIntent.shipping || charge?.shipping || {};
   const addr = shipping.address || {};
-  const paymentMethodShipping = paymentIntent.payment_method?.shipping || {};
+
+  const paymentMethod =
+    typeof paymentIntent.payment_method === 'object' ? paymentIntent.payment_method : null;
+  const paymentMethodShipping = paymentMethod?.shipping || {};
   const pmAddr = paymentMethodShipping.address || {};
+
   const billing =
-    paymentIntent.latest_charge?.billing_details ||
-    paymentIntent.charges?.data?.[0]?.billing_details ||
+    charge?.billing_details ||
+    paymentMethod?.billing_details ||
     {};
+  const billAddr = billing.address || {};
 
-  const name = shipping.name || paymentMethodShipping.name || billing.name || null;
-  const line1 = addr.line1 || pmAddr.line1;
-  const line2 = addr.line2 || pmAddr.line2;
+  const name =
+    shipping.name ||
+    paymentMethodShipping.name ||
+    billing.name ||
+    null;
+  const line1 = addr.line1 || pmAddr.line1 || billAddr.line1;
+  const line2 = addr.line2 || pmAddr.line2 || billAddr.line2;
   const street = [line1, line2].filter(Boolean).join(', ');
+  const city = addr.city || pmAddr.city || billAddr.city;
+  const zipCode = addr.postal_code || pmAddr.postal_code || billAddr.postal_code;
 
-  if (!name && !street) return null;
+  // Prefer real shipping/billing street; never invent an address from name alone.
+  if (!street && !city && !zipCode) return null;
 
   return {
     email: billing.email || paymentIntent.receipt_email || null,
-    fullName: name,
+    fullName: name || 'Customer',
     phone: billing.phone || paymentMethodShipping.phone || null,
-    street: street,
-    city: addr.city || pmAddr.city,
-    state: addr.state || pmAddr.state || null,
-    zipCode: addr.postal_code || pmAddr.postal_code,
-    country: mapCountry(addr.country || pmAddr.country),
+    street: street || 'Address on file',
+    city: city || 'To be confirmed',
+    state: addr.state || pmAddr.state || billAddr.state || null,
+    zipCode: zipCode || 'TBC',
+    country: mapCountry(addr.country || pmAddr.country || billAddr.country),
   };
 }
 
@@ -337,7 +354,7 @@ class PaymentsService {
     const cancelBase =
       process.env.STRIPE_CANCEL_URL || `${frontendBase}/checkout/cancel`;
 
-    const successUrl = `${successBase}${successBase.includes('?') ? '&' : '?'}orderId=${order.id}`;
+    const successUrl = `${successBase}${successBase.includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}&orderId=${order.id}`;
     const cancelUrl = `${cancelBase}${cancelBase.includes('?') ? '&' : '?'}orderId=${order.id}`;
 
     const sessionConfig = {
@@ -630,10 +647,13 @@ class PaymentsService {
 
     if (!orderId) throw new Error('Order id missing from payment intent metadata');
 
+    // Payment already succeeded — never abandon for a missing address.
+    // Pull PayPal/wallet address from shipping or billing on the intent/charge.
     const stripeShippingAddress = mapPaymentIntentShipping(paymentIntent);
     if (!stripeShippingAddress) {
-      await orderService.abandonUnpaidOrder(orderId, 'Express payment intent missing shipping address');
-      throw new Error('Payment intent is missing shipping address. Order abandoned.');
+      console.warn(
+        `[Stripe] PaymentIntent ${paymentIntentId} succeeded without extractable address; confirming with draft address.`,
+      );
     }
 
     const updatedOrder = await orderService.confirmPayment(
@@ -644,6 +664,53 @@ class PaymentsService {
     );
 
     return updatedOrder;
+  }
+
+  /**
+   * Confirm a paid order using our orderId when the browser lost session_id /
+   * payment_intent from storage after a PayPal (or other) redirect.
+   * Order.paymentIntentId holds either a Checkout Session id (cs_...) or PI id (pi_...).
+   */
+  async confirmPaidOrderByOrderId(orderId) {
+    if (!this.stripe) throw new Error('Stripe not configured. Set STRIPE_SECRET env var.');
+    if (!orderId) throw new Error('orderId is required');
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        paymentStatus: true,
+        paymentIntentId: true,
+        isDeleted: true,
+      },
+    });
+
+    if (!order || order.isDeleted) {
+      throw new Error('Order not found');
+    }
+
+    if (order.paymentStatus === 'PAID') {
+      return orderService.getOrderById(order.id, null, true);
+    }
+
+    const stripeRef = order.paymentIntentId;
+    if (!stripeRef) {
+      throw new Error('No pending Stripe session found');
+    }
+
+    if (String(stripeRef).startsWith('cs_')) {
+      return this.confirmCheckoutSession(stripeRef);
+    }
+
+    if (String(stripeRef).startsWith('pi_')) {
+      return this.confirmExpressPayment(stripeRef);
+    }
+
+    try {
+      return await this.confirmCheckoutSession(stripeRef);
+    } catch {
+      return this.confirmExpressPayment(stripeRef);
+    }
   }
 }
 
