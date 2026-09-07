@@ -100,10 +100,17 @@ function mapPaymentIntentShipping(paymentIntent) {
     {};
   const billAddr = billing.address || {};
 
+  // PayPal / Klarna sometimes only surface payer data on the payment method
+  // details block instead of `charge.shipping`. Pull whatever we can find.
+  const paypalDetails = charge?.payment_method_details?.paypal || {};
+  const klarnaDetails = charge?.payment_method_details?.klarna || {};
+
   const name =
     shipping.name ||
     paymentMethodShipping.name ||
     billing.name ||
+    paypalDetails.payer_name ||
+    klarnaDetails.payer_name ||
     null;
   const line1 = addr.line1 || pmAddr.line1 || billAddr.line1;
   const line2 = addr.line2 || pmAddr.line2 || billAddr.line2;
@@ -112,16 +119,39 @@ function mapPaymentIntentShipping(paymentIntent) {
   const zipCode = addr.postal_code || pmAddr.postal_code || billAddr.postal_code;
 
   // Prefer real shipping/billing street; never invent an address from name alone.
-  if (!street && !city && !zipCode) return null;
+  if (!street && !city && !zipCode) {
+    // Nothing usable at all — bail out so callers can decide how to log/handle.
+    if (!name) return null;
+    return {
+      email:
+        billing.email ||
+        paypalDetails.payer_email ||
+        klarnaDetails.payer_email ||
+        paymentIntent.receipt_email ||
+        null,
+      fullName: name,
+      phone: billing.phone || paymentMethodShipping.phone || null,
+      street: '',
+      city: null,
+      state: null,
+      zipCode: null,
+      country: null,
+    };
+  }
 
   return {
-    email: billing.email || paymentIntent.receipt_email || null,
+    email:
+      billing.email ||
+      paypalDetails.payer_email ||
+      klarnaDetails.payer_email ||
+      paymentIntent.receipt_email ||
+      null,
     fullName: name || 'Customer',
     phone: billing.phone || paymentMethodShipping.phone || null,
-    street: street || 'Address on file',
-    city: city || 'To be confirmed',
+    street: street || '',
+    city: city || null,
     state: addr.state || pmAddr.state || billAddr.state || null,
-    zipCode: zipCode || 'TBC',
+    zipCode: zipCode || null,
     country: mapCountry(addr.country || pmAddr.country || billAddr.country),
   };
 }
@@ -130,29 +160,52 @@ function mapPaymentIntentShipping(paymentIntent) {
 function mapStripeCollectedAddress(session) {
   const collectedShipping = session.collected_information?.shipping_details || null;
   const legacyShipping = session.shipping_details || session.shipping || {};
-  const shipping = collectedShipping || legacyShipping;
-  const addr = shipping?.address || {};
-  const name = shipping?.name || session.customer_details?.name || null;
-  const street = [addr.line1, addr.line2].filter(Boolean).join(', ');
+  const sessionShipping = collectedShipping || legacyShipping;
+  const sessionAddr = sessionShipping?.address || {};
+  const custDetails = session.customer_details || {};
+
+  // PayPal / Klarna hosted-checkout redirects sometimes skip Stripe's own
+  // address form and return the buyer's ship-to on the underlying PaymentIntent
+  // (populated from the wallet). Fall back to that data if the session block
+  // is empty or partial.
+  const paymentIntent =
+    typeof session.payment_intent === 'object' && session.payment_intent
+      ? session.payment_intent
+      : null;
+  const piAddress = paymentIntent ? mapPaymentIntentShipping(paymentIntent) : null;
+
+  const sessionStreet = [sessionAddr.line1, sessionAddr.line2].filter(Boolean).join(', ');
+
+  const name = sessionShipping?.name || custDetails.name || piAddress?.fullName || null;
+  const street = sessionStreet || piAddress?.street || '';
+  const city = sessionAddr.city || piAddress?.city || null;
+  const state = sessionAddr.state || piAddress?.state || null;
+  const zipCode = sessionAddr.postal_code || piAddress?.zipCode || null;
+  const countryRaw = sessionAddr.country || piAddress?.country || null;
+  const phone = custDetails.phone || sessionShipping?.phone || piAddress?.phone || null;
 
   if (!name && !street) {
     console.error('[Stripe] No shipping name or street in session', {
+      sessionId: session.id,
+      paymentStatus: session.payment_status,
       hasCollectedInformation: Boolean(collectedShipping),
       hasLegacyShipping: Boolean(legacyShipping?.address),
-      customerDetails: session.customer_details,
+      hasPaymentIntent: Boolean(paymentIntent),
+      hasPiAddress: Boolean(piAddress),
+      customerDetails: custDetails,
     });
     return null;
   }
 
   return {
-    email: session.customer_details?.email || session.customer_email || null,
-    fullName: name,
-    phone: session.customer_details?.phone || shipping?.phone || null,
-    street: street,
-    city: addr.city,
-    state: addr.state || null,
-    zipCode: addr.postal_code,
-    country: mapCountry(addr.country),
+    email: custDetails.email || session.customer_email || piAddress?.email || null,
+    fullName: name || 'Customer',
+    phone,
+    street,
+    city,
+    state,
+    zipCode,
+    country: mapCountry(countryRaw),
   };
 }
 
@@ -402,8 +455,19 @@ class PaymentsService {
   async confirmCheckoutSession(sessionId) {
     if (!this.stripe) throw new Error('Stripe not configured. Set STRIPE_SECRET env var.');
 
-    const session = await this.stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ['collected_information', 'shipping_cost.shipping_rate'],
+    // Use the same API version as we create sessions with so newer fields
+    // (e.g. collected_information) and expansions round-trip cleanly.
+    const stripe = this.stripeCheckout || this.stripe;
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: [
+        'collected_information',
+        'shipping_cost.shipping_rate',
+        // PayPal / Klarna often surface the buyer's ship-to on the PaymentIntent
+        // rather than on the session itself — pull it back in one round-trip.
+        'payment_intent',
+        'payment_intent.latest_charge',
+        'payment_intent.payment_method',
+      ],
     });
     if (!session) throw new Error('Checkout session not found');
 
@@ -421,8 +485,12 @@ class PaymentsService {
 
     const stripeShippingAddress = mapStripeCollectedAddress(session);
     if (!stripeShippingAddress) {
-      await orderService.abandonUnpaidOrder(orderId, 'Stripe checkout session missing shipping address');
-      throw new Error('Checkout session is missing shipping address. Order abandoned.');
+      // Payment has already succeeded — never revert / abandon a paid order.
+      // Return whatever we have and let admin fix the address if needed.
+      console.error(
+        `[Stripe] Session ${sessionId} paid but shipping address could not be extracted; returning existing order.`,
+      );
+      return orderService.getOrderById(orderId, null, true);
     }
 
     const updatedOrder = await orderService.confirmPayment(
@@ -706,6 +774,26 @@ class PaymentsService {
     }
 
     if (order.paymentStatus === 'PAID') {
+      // Order already marked paid — but the ship-to on file may still be the
+      // placeholder if the first confirm ran before Stripe had the address.
+      // Re-run the appropriate confirm path to trigger the shipping backfill in
+      // OrderService#confirmPayment.
+      const stripeRef = order.paymentIntentId;
+      if (stripeRef) {
+        try {
+          if (String(stripeRef).startsWith('cs_')) {
+            return await this.confirmCheckoutSession(stripeRef);
+          }
+          if (String(stripeRef).startsWith('pi_')) {
+            return await this.confirmExpressPayment(stripeRef);
+          }
+        } catch (error) {
+          console.warn(
+            `[Stripe] Paid order ${orderId} address backfill skipped:`,
+            error.message,
+          );
+        }
+      }
       return orderService.getOrderById(order.id, null, true);
     }
 

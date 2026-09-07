@@ -6,6 +6,73 @@ import promoService from "./promo.service.js";
 import { resolveVariantStock, resolveStoragePrice, syncProductStockTotal, formatStorageLabel } from "../utils/stock.js";
 
 /**
+ * Draft orders (created before Stripe checkout) hold a placeholder shipping
+ * address until the real one is collected on Stripe's hosted page. When a
+ * PayPal / Klarna confirmation later returns partial data, we must NOT fall
+ * back to these placeholder values — otherwise the "To be confirmed" strings
+ * end up saved as the real ship-to on a paid order.
+ */
+function isPlaceholderShippingValue(value) {
+  if (value == null) return true;
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) return true;
+  return normalized === "to be confirmed" || normalized === "tbc";
+}
+
+function isPlaceholderShipping(address) {
+  if (!address) return true;
+  return (
+    isPlaceholderShippingValue(address.street) ||
+    isPlaceholderShippingValue(address.city) ||
+    isPlaceholderShippingValue(address.zipCode) ||
+    isPlaceholderShippingValue(address.fullName)
+  );
+}
+
+/**
+ * Pick a real value: prefer the incoming (Stripe-provided) value, otherwise
+ * keep the existing DB value only if it is not itself a placeholder. This
+ * guarantees we never leave `"To be confirmed"` on file once Stripe has given
+ * us at least a partial real address.
+ */
+function pickRealValue(incoming, existing) {
+  const incomingClean =
+    incoming != null && String(incoming).trim() !== "" ? incoming : null;
+  if (incomingClean && !isPlaceholderShippingValue(incomingClean)) {
+    return incomingClean;
+  }
+  if (existing != null && !isPlaceholderShippingValue(existing)) {
+    return existing;
+  }
+  return incomingClean;
+}
+
+function buildShippingUpdatePayload(existingAddress, stripeAddress) {
+  return {
+    fullName:
+      pickRealValue(stripeAddress.fullName, existingAddress?.fullName) ||
+      "Customer",
+    phone: pickRealValue(stripeAddress.phone, existingAddress?.phone),
+    street:
+      pickRealValue(stripeAddress.street, existingAddress?.street) ||
+      existingAddress?.street ||
+      null,
+    city:
+      pickRealValue(stripeAddress.city, existingAddress?.city) ||
+      existingAddress?.city ||
+      null,
+    state: pickRealValue(stripeAddress.state, existingAddress?.state),
+    zipCode:
+      pickRealValue(stripeAddress.zipCode, existingAddress?.zipCode) ||
+      existingAddress?.zipCode ||
+      null,
+    country:
+      pickRealValue(stripeAddress.country, existingAddress?.country) ||
+      "United Kingdom",
+  };
+}
+
+/**
  * OrderService
  * Handles order creation and management
  */
@@ -648,7 +715,23 @@ class OrderService {
     }
 
     // Idempotent confirm: avoid double stock/promo/cart mutations.
+    // Still backfill shipping when the draft placeholder is on file and Stripe
+    // has since returned a real address (typical for PayPal / Klarna where the
+    // first confirm runs before Stripe surfaces the ship-to).
     if (existing.paymentStatus === 'PAID') {
+      if (stripeShippingAddress && isPlaceholderShipping(existing.address)) {
+        await prisma.userAddress.update({
+          where: { id: existing.address.id },
+          data: buildShippingUpdatePayload(existing.address, stripeShippingAddress),
+        });
+        if (!existing.userId && stripeShippingAddress?.email) {
+          await prisma.order.update({
+            where: { id: orderId },
+            data: { guestEmail: stripeShippingAddress.email },
+          });
+        }
+        return this.getOrderById(orderId, null, true);
+      }
       return this.#formatOrder(existing, true);
     }
 
@@ -733,18 +816,12 @@ class OrderService {
         });
       }
 
-      if (stripeShippingAddress?.fullName) {
+      if (stripeShippingAddress) {
+        // Never fall back to the "To be confirmed" placeholder that the draft
+        // order was created with — prefer any real value Stripe provided.
         await tx.userAddress.update({
           where: { id: existing.address.id },
-          data: {
-            fullName: stripeShippingAddress.fullName,
-            phone: stripeShippingAddress.phone || existing.address.phone || null,
-            street: stripeShippingAddress.street || existing.address.street,
-            city: stripeShippingAddress.city || existing.address.city,
-            state: stripeShippingAddress.state || existing.address.state || null,
-            zipCode: stripeShippingAddress.zipCode || existing.address.zipCode,
-            country: stripeShippingAddress.country || existing.address.country,
-          },
+          data: buildShippingUpdatePayload(existing.address, stripeShippingAddress),
         });
       }
 
