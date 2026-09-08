@@ -156,7 +156,6 @@ function mapPaymentIntentShipping(paymentIntent) {
   };
 }
 
-
 function mapStripeCollectedAddress(session) {
   const collectedShipping = session.collected_information?.shipping_details || null;
   const legacyShipping = session.shipping_details || session.shipping || {};
@@ -707,7 +706,8 @@ class PaymentsService {
   async confirmExpressPayment(paymentIntentId) {
     if (!this.stripe) throw new Error('Stripe not configured. Set STRIPE_SECRET env var.');
 
-    const paymentIntent = await this.stripe.paymentIntents.retrieve(paymentIntentId, {
+    const stripe = this.stripeCheckout || this.stripe;
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
       expand: ['latest_charge', 'payment_method'],
     });
 
@@ -734,11 +734,6 @@ class PaymentsService {
     // Payment already succeeded — never abandon for a missing address.
     // Pull PayPal/wallet address from shipping or billing on the intent/charge.
     const stripeShippingAddress = mapPaymentIntentShipping(paymentIntent);
-    if (!stripeShippingAddress) {
-      console.warn(
-        `[Stripe] PaymentIntent ${paymentIntentId} succeeded without extractable address; confirming with draft address.`,
-      );
-    }
 
     const updatedOrder = await orderService.confirmPayment(
       orderId,
