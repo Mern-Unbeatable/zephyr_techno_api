@@ -455,6 +455,7 @@ class PaymentsService {
     const session = await this.#createCheckoutSessionWithWallets(
       sessionConfig,
       forcedPaymentMethodTypes,
+      Number(order.totalPrice) || 0,
     );
 
     // Persist Stripe session id for cancel / reconcile
@@ -533,13 +534,32 @@ class PaymentsService {
     return getStripePublishableKey();
   }
 
-  async #createCheckoutSessionWithWallets(sessionConfig, forcedPaymentMethodTypes = null) {
+  /**
+   * Build Checkout payment methods for the full "More Payment Options" flow.
+   * Clearpay (afterpay_clearpay) is only eligible £1–£1,200 — exclude above that
+   * so PayPal/Klarna are not dropped with automatic_payment_methods filtering.
+   * Forced single-method sessions (standalone PayPal/Klarna) pass types through unchanged.
+   */
+  #fullCheckoutPaymentMethodTypes(amountGbp = 0) {
+    const types = ['card', 'link', 'paypal', 'klarna'];
+    const amount = Number(amountGbp) || 0;
+    if (amount > 0 && amount <= 1200) {
+      types.push('afterpay_clearpay');
+    }
+    return types;
+  }
+
+  async #createCheckoutSessionWithWallets(
+    sessionConfig,
+    forcedPaymentMethodTypes = null,
+    amountGbp = 0,
+  ) {
     const stripe = this.stripeCheckout || this.stripe;
     const forced = Array.isArray(forcedPaymentMethodTypes)
       ? forcedPaymentMethodTypes.filter((type) => typeof type === 'string' && type.trim())
       : [];
 
-    // Single-method sessions (e.g. Klarna-only) must not enable every wallet.
+    // Single-method sessions (e.g. Klarna-only / PayPal-only) must not enable every wallet.
     if (forced.length > 0) {
       return stripe.checkout.sessions.create({
         ...sessionConfig,
@@ -547,20 +567,27 @@ class PaymentsService {
       });
     }
 
+    const paymentMethodTypes = this.#fullCheckoutPaymentMethodTypes(amountGbp);
+
     try {
       return await stripe.checkout.sessions.create({
         ...sessionConfig,
-        automatic_payment_methods: { enabled: true },
+        payment_method_types: paymentMethodTypes,
       });
     } catch (error) {
       console.warn(
-        '[Stripe] Checkout with automatic payment methods failed, falling back:',
+        '[Stripe] Checkout with full payment method list failed, falling back:',
         error.message,
+        { paymentMethodTypes },
+      );
+      // Retry without Clearpay if it was included (some accounts reject the type).
+      const withoutClearpay = paymentMethodTypes.filter(
+        (type) => type !== 'afterpay_clearpay',
       );
       try {
         return await stripe.checkout.sessions.create({
           ...sessionConfig,
-          payment_method_types: ['card', 'link', 'paypal', 'klarna', 'afterpay_clearpay'],
+          payment_method_types: withoutClearpay,
         });
       } catch (inner) {
         const { adaptive_pricing: _adaptivePricing, ...legacyConfig } = sessionConfig;
