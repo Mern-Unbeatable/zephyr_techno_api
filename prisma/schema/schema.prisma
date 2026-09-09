@@ -143,6 +143,7 @@ model Category {
   name      String    @unique
   products  Product[]
   productConditions ProductCondition[]
+  variantStocks ProductVariantStock[]
   cartItems  CartItem[]  @relation("CartItemConditionCategory")
   orderItems OrderItem[] @relation("OrderItemConditionCategory")
   isDeleted Boolean   @default(false)
@@ -419,13 +420,14 @@ model ProductStorageOption {
   @@index([productId])
 }
 
-/// Buy-side condition options on a listing (e.g. New Sealed / Used - Excellent).
-/// Colours & storage stay shared; price + stock are set per condition.
+/// Buy-side condition options on a listing (which conditions are offered).
+/// Price / stock SoT is ProductVariantStock (condition × colour × storage).
+/// These columns are rollups for convenience (min price / sum stock).
 model ProductCondition {
   id             String   @id @default(uuid())
   productId      String
   categoryId     String
-  price          Decimal  @db.Decimal(12, 2)
+  price          Decimal  @default(0) @db.Decimal(12, 2)
   compareAtPrice Decimal? @db.Decimal(12, 2)
   stockQuantity  Int      @default(0)
   createdAt      DateTime @default(now())
@@ -441,24 +443,32 @@ model ProductCondition {
   @@index([categoryId])
 }
 
-/// Stock for a specific color × storage combination (inventory source of truth).
+/// Inventory + pricing for Condition × Colour × Storage (single source of truth).
+/// When the listing has no conditions, conditionCategoryId/conditionKey are null/"".
 model ProductVariantStock {
-  id                     String  @id @default(uuid())
+  id                     String   @id @default(uuid())
   productId              String
   colorId                String
   storageOptionId        String
-  stockQuantity          Int     @default(0)
-  /// When false, Express Delivery is not offered for this colour × storage pair.
-  expressDeliveryEnabled Boolean @default(true)
+  conditionCategoryId    String?
+  /// Non-null unique helper: category UUID or "" when no condition axis.
+  conditionKey           String   @default("")
+  stockQuantity          Int      @default(0)
+  price                  Decimal? @db.Decimal(12, 2)
+  compareAtPrice         Decimal? @db.Decimal(12, 2)
+  /// When false, Express Delivery is not offered for this cell.
+  expressDeliveryEnabled Boolean  @default(true)
 
-  product       Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
-  color         Color         @relation(fields: [colorId], references: [id], onDelete: Restrict)
-  storageOption StorageOption @relation(fields: [storageOptionId], references: [id], onDelete: Restrict)
+  product           Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color             Color         @relation(fields: [colorId], references: [id], onDelete: Restrict)
+  storageOption     StorageOption @relation(fields: [storageOptionId], references: [id], onDelete: Restrict)
+  conditionCategory Category?     @relation(fields: [conditionCategoryId], references: [id], onDelete: Restrict)
 
-  @@unique([productId, colorId, storageOptionId])
+  @@unique([productId, conditionKey, colorId, storageOptionId])
   @@index([productId])
   @@index([colorId])
   @@index([storageOptionId])
+  @@index([conditionCategoryId])
 }
 
 // =====================================================================================

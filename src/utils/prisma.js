@@ -68,7 +68,7 @@ const prisma = basePrisma.$extends({
       },
       async findUnique({ model, operation, args, query }) {
         // Hard-delete models have no isDeleted — keep real findUnique so compound
-        // unique keys (e.g. productId_colorId_storageOptionId) still work.
+        // unique keys (e.g. productId_conditionKey_colorId_storageOptionId) still work.
         if (HARD_DELETE_MODELS.has(model)) {
           if (args?.includeDeleted) {
             const { includeDeleted, ...rest } = args;

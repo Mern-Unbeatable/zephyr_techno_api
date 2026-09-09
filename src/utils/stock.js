@@ -19,8 +19,45 @@ export function sumVariantStocks(variantStocks = []) {
   );
 }
 
-export function variantStockKey(colorId, storageOptionId) {
-  return `${colorId}::${storageOptionId}`;
+/**
+ * Matrix cell key: condition × colour × storage.
+ * 2-arg form (legacy) → empty condition axis (`::colorId::storageOptionId`).
+ * 3-arg form → `${conditionCategoryId || ''}::${colorId}::${storageOptionId}`.
+ */
+export function variantStockKey(colorId, storageOptionId, conditionCategoryId = null) {
+  return `${conditionCategoryId || ''}::${colorId}::${storageOptionId}`;
+}
+
+export function parseVariantStockKey(key) {
+  const parts = String(key ?? '').split('::');
+  if (parts.length >= 3) {
+    return {
+      conditionKey: parts[0] ?? '',
+      colorId: parts[1],
+      storageOptionId: parts[2],
+    };
+  }
+  return {
+    conditionKey: '',
+    colorId: parts[0],
+    storageOptionId: parts[1],
+  };
+}
+
+export function variantStockUniqueWhere(
+  productId,
+  colorId,
+  storageOptionId,
+  conditionCategoryId = null,
+) {
+  return {
+    productId_conditionKey_colorId_storageOptionId: {
+      productId,
+      conditionKey: conditionCategoryId || '',
+      colorId,
+      storageOptionId,
+    },
+  };
 }
 
 export function storageSizeInGb(name) {
@@ -157,10 +194,53 @@ export function minConditionPrice(productConditions = [], productBasePrice = 0) 
   return Math.min(...prices);
 }
 
+/** Unit price from a Condition × Colour × Storage matrix cell. */
+export function resolveMatrixPrice(cell, fallbackBasePrice = 0) {
+  if (cell?.price != null && cell.price !== '') {
+    return Math.max(0, Number(cell.price) || 0);
+  }
+  return Math.max(0, Number(fallbackBasePrice) || 0);
+}
+
+/** Stock from a matrix cell (0 when missing). */
+export function resolveMatrixStock(cell) {
+  if (cell && cell.stockQuantity != null) {
+    return Math.max(0, Number(cell.stockQuantity) || 0);
+  }
+  return 0;
+}
+
+/** Lowest positive price across matrix cells (objects or Map values). */
+export function minMatrixPrice(variantStocks = [], basePrice = 0) {
+  const cells = Array.isArray(variantStocks)
+    ? variantStocks
+    : variantStocks instanceof Map
+      ? [...variantStocks.values()]
+      : [];
+
+  if (!cells.length) {
+    return Math.max(0, Number(basePrice) || 0);
+  }
+
+  const prices = cells
+    .map((entry) => {
+      if (entry == null) return 0;
+      if (typeof entry === 'object') return resolveMatrixPrice(entry, 0);
+      return Math.max(0, Number(entry) || 0);
+    })
+    .filter((price) => price > 0);
+
+  if (!prices.length) {
+    return Math.max(0, Number(basePrice) || 0);
+  }
+
+  return Math.min(...prices);
+}
+
 /**
  * Purchase stock for a cart/order line.
- * When the listing has ProductConditions, stock comes from the selected condition;
- * otherwise colour × storage (variant) rules apply.
+ * Prefers ProductVariantStock matrix cell when provided; otherwise condition
+ * rollups (legacy) or colour × storage rules.
  */
 export function resolvePurchaseStock({
   conditionBridge = null,
@@ -170,6 +250,9 @@ export function resolvePurchaseStock({
   storageBridge = null,
   productStock = 0,
 } = {}) {
+  if (variantBridge && variantBridge.stockQuantity != null) {
+    return resolveMatrixStock(variantBridge);
+  }
   if (hasConditions) {
     return resolveConditionStock(conditionBridge, productStock);
   }
@@ -181,40 +264,71 @@ export function resolvePurchaseStock({
   });
 }
 
+/**
+ * Always sum ProductVariantStock when present; roll up ProductCondition,
+ * ProductColor, and ProductStorageOption aggregates from the matrix.
+ */
 export async function syncProductStockTotal(tx, productId) {
-  const conditions = await tx.productCondition.findMany({
-    where: { productId, isDeleted: false },
-    select: { stockQuantity: true },
-  });
-
-  if (conditions.length > 0) {
-    const total = sumConditionStocks(conditions);
-    await tx.product.update({
-      where: { id: productId },
-      data: { stockQuantity: total },
-    });
-    return total;
-  }
-
   const variants = await tx.productVariantStock.findMany({
     where: { productId },
-    select: { stockQuantity: true, colorId: true, storageOptionId: true },
+    select: {
+      stockQuantity: true,
+      colorId: true,
+      storageOptionId: true,
+      conditionCategoryId: true,
+      conditionKey: true,
+      price: true,
+      compareAtPrice: true,
+    },
   });
 
   if (variants.length > 0) {
     const total = sumVariantStocks(variants);
     const byColor = new Map();
     const byStorage = new Map();
+    const byCondition = new Map();
+    const storagePriceBuckets = new Map();
+
     for (const row of variants) {
-      byColor.set(
-        row.colorId,
-        (byColor.get(row.colorId) || 0) + Math.max(0, Number(row.stockQuantity) || 0),
-      );
+      const qty = Math.max(0, Number(row.stockQuantity) || 0);
+      byColor.set(row.colorId, (byColor.get(row.colorId) || 0) + qty);
       byStorage.set(
         row.storageOptionId,
-        (byStorage.get(row.storageOptionId) || 0) +
-          Math.max(0, Number(row.stockQuantity) || 0),
+        (byStorage.get(row.storageOptionId) || 0) + qty,
       );
+
+      if (!storagePriceBuckets.has(row.storageOptionId)) {
+        storagePriceBuckets.set(row.storageOptionId, {
+          prices: [],
+          compareAts: [],
+        });
+      }
+      const storageBucket = storagePriceBuckets.get(row.storageOptionId);
+      if (row.price != null && Number(row.price) > 0) {
+        storageBucket.prices.push(Number(row.price));
+      }
+      if (row.compareAtPrice != null && Number(row.compareAtPrice) > 0) {
+        storageBucket.compareAts.push(Number(row.compareAtPrice));
+      }
+
+      const categoryId = row.conditionCategoryId || (row.conditionKey || null);
+      if (categoryId) {
+        if (!byCondition.has(categoryId)) {
+          byCondition.set(categoryId, {
+            stock: 0,
+            prices: [],
+            compareAts: [],
+          });
+        }
+        const bucket = byCondition.get(categoryId);
+        bucket.stock += qty;
+        if (row.price != null && Number(row.price) > 0) {
+          bucket.prices.push(Number(row.price));
+        }
+        if (row.compareAtPrice != null && Number(row.compareAtPrice) > 0) {
+          bucket.compareAts.push(Number(row.compareAtPrice));
+        }
+      }
     }
 
     await Promise.all([
@@ -228,14 +342,51 @@ export async function syncProductStockTotal(tx, productId) {
           data: { stockQuantity },
         }),
       ),
-      ...[...byStorage.entries()].map(([storageOptionId, stockQuantity]) =>
-        tx.productStorageOption.updateMany({
+      ...[...byStorage.entries()].map(([storageOptionId, stockQuantity]) => {
+        const priceBucket = storagePriceBuckets.get(storageOptionId);
+        const minPrice = priceBucket?.prices?.length
+          ? Math.min(...priceBucket.prices)
+          : undefined;
+        const minCompare = priceBucket?.compareAts?.length
+          ? Math.min(...priceBucket.compareAts)
+          : null;
+        return tx.productStorageOption.updateMany({
           where: { productId, storageOptionId },
-          data: { stockQuantity },
+          data: {
+            stockQuantity,
+            ...(minPrice != null ? { price: minPrice } : {}),
+            compareAtPrice: minCompare,
+          },
+        });
+      }),
+      ...[...byCondition.entries()].map(([categoryId, bucket]) =>
+        tx.productCondition.updateMany({
+          where: { productId, categoryId },
+          data: {
+            stockQuantity: bucket.stock,
+            ...(bucket.prices.length ? { price: Math.min(...bucket.prices) } : {}),
+            compareAtPrice: bucket.compareAts.length
+              ? Math.min(...bucket.compareAts)
+              : null,
+          },
         }),
       ),
     ]);
 
+    return total;
+  }
+
+  const conditions = await tx.productCondition.findMany({
+    where: { productId, isDeleted: false },
+    select: { stockQuantity: true },
+  });
+
+  if (conditions.length > 0) {
+    const total = sumConditionStocks(conditions);
+    await tx.product.update({
+      where: { id: productId },
+      data: { stockQuantity: total },
+    });
     return total;
   }
 

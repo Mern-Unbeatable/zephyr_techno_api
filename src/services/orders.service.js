@@ -3,7 +3,7 @@ import AppError from "../utils/app-error.js";
 import Mailer from "../utils/mailer.js";
 import { buildImageUrl, resolveProductThumbnail } from "../utils/url.js";
 import promoService from "./promo.service.js";
-import { resolveVariantStock, resolveStoragePrice, resolvePurchaseStock, resolveConditionPrice, syncProductStockTotal, formatStorageLabel } from "../utils/stock.js";
+import { resolveStoragePrice, resolvePurchaseStock, resolveConditionPrice, resolveMatrixPrice, syncProductStockTotal, formatStorageLabel, variantStockUniqueWhere } from "../utils/stock.js";
 
 /**
  * Draft orders (created before Stripe checkout) hold a placeholder shipping
@@ -93,28 +93,21 @@ class OrderService {
       select: { categoryId: true, stockQuantity: true },
     });
     const hasConditions = conditions.length > 0;
-    if (hasConditions) {
-      const conditionBridge =
-        conditions.find((row) => row.categoryId === item.conditionCategoryId) ||
-        null;
-      return resolvePurchaseStock({
-        conditionBridge,
-        hasConditions: true,
-        productStock: item.product?.stockQuantity ?? 0,
-      });
-    }
+    const conditionBridge = hasConditions
+      ? conditions.find((row) => row.categoryId === item.conditionCategoryId) ||
+        null
+      : null;
 
     const [variantBridge, storageBridge, colorBridge] = await Promise.all([
       item.colorId && item.storageOptionId
         ? client.productVariantStock.findUnique({
-            where: {
-              productId_colorId_storageOptionId: {
-                productId: item.productId,
-                colorId: item.colorId,
-                storageOptionId: item.storageOptionId,
-              },
-            },
-            select: { stockQuantity: true },
+            where: variantStockUniqueWhere(
+              item.productId,
+              item.colorId,
+              item.storageOptionId,
+              item.conditionCategoryId,
+            ),
+            select: { stockQuantity: true, price: true },
           })
         : Promise.resolve(null),
       client.productStorageOption.findFirst({
@@ -134,7 +127,14 @@ class OrderService {
           })
         : Promise.resolve(null),
     ]);
-    return resolveVariantStock({
+
+    if (hasConditions && !variantBridge) {
+      return 0;
+    }
+
+    return resolvePurchaseStock({
+      conditionBridge,
+      hasConditions,
       variantBridge,
       colorBridge,
       storageBridge,
@@ -143,6 +143,35 @@ class OrderService {
   }
 
   async #getItemUnitPrice(item) {
+    const variantBridge =
+      item.colorId && item.storageOptionId
+        ? await prisma.productVariantStock.findUnique({
+            where: variantStockUniqueWhere(
+              item.productId,
+              item.colorId,
+              item.storageOptionId,
+              item.conditionCategoryId,
+            ),
+            select: { price: true },
+          })
+        : null;
+
+    const storageBridge = await prisma.productStorageOption.findFirst({
+      where: {
+        productId: item.productId,
+        storageOptionId: item.storageOptionId,
+      },
+      select: { price: true },
+    });
+    const storageFallback = resolveStoragePrice(
+      storageBridge,
+      item.product.basePrice,
+    );
+
+    if (variantBridge) {
+      return resolveMatrixPrice(variantBridge, storageFallback);
+    }
+
     if (item.conditionCategoryId) {
       const conditionBridge = await prisma.productCondition.findFirst({
         where: {
@@ -155,14 +184,7 @@ class OrderService {
       return resolveConditionPrice(conditionBridge, item.product.basePrice);
     }
 
-    const bridge = await prisma.productStorageOption.findFirst({
-      where: {
-        productId: item.productId,
-        storageOptionId: item.storageOptionId,
-      },
-      select: { price: true },
-    });
-    return resolveStoragePrice(bridge, item.product.basePrice);
+    return storageFallback;
   }
 
   /**
@@ -819,28 +841,20 @@ class OrderService {
         }
       }
 
-      // Decrement condition stock when selected; otherwise colour × storage / storage.
+      // Decrement the specific Condition × Colour × Storage matrix cell.
       const touchedProductIds = new Set();
       for (const item of existing.orderItems) {
-        if (item.conditionCategoryId) {
-          await tx.productCondition.updateMany({
-            where: {
-              productId: item.productId,
-              categoryId: item.conditionCategoryId,
-              isDeleted: false,
-            },
-            data: { stockQuantity: { decrement: item.quantity } },
-          });
-        } else if (item.colorId && item.storageOptionId) {
+        if (item.colorId && item.storageOptionId) {
           await tx.productVariantStock.updateMany({
             where: {
               productId: item.productId,
               colorId: item.colorId,
               storageOptionId: item.storageOptionId,
+              conditionKey: item.conditionCategoryId || '',
             },
             data: { stockQuantity: { decrement: item.quantity } },
           });
-        } else {
+        } else if (item.storageOptionId) {
           await tx.productStorageOption.updateMany({
             where: {
               productId: item.productId,

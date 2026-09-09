@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import env from '../config/env.js';
 import orderService from './orders.service.js';
 import prisma from '../utils/prisma.js';
+import { variantStockUniqueWhere } from '../utils/stock.js';
 
 const PLACEHOLDER_SHIPPING = {
   fullName: 'To be confirmed',
@@ -263,23 +264,32 @@ class PaymentsService {
     return PLACEHOLDER_SHIPPING;
   }
 
-  async #variantAllowsExpressDelivery(productId, colorId, storageOptionId) {
+  async #variantAllowsExpressDelivery(
+    productId,
+    colorId,
+    storageOptionId,
+    conditionCategoryId = null,
+  ) {
     if (!productId || !colorId || !storageOptionId) return true;
 
     const row = await prisma.productVariantStock.findUnique({
-      where: {
-        productId_colorId_storageOptionId: {
-          productId,
-          colorId,
-          storageOptionId,
-        },
-      },
+      where: variantStockUniqueWhere(
+        productId,
+        colorId,
+        storageOptionId,
+        conditionCategoryId,
+      ),
       select: { expressDeliveryEnabled: true },
     });
 
     if (!row) {
       const fallback = await prisma.productVariantStock.findFirst({
-        where: { productId, colorId, storageOptionId },
+        where: {
+          productId,
+          colorId,
+          storageOptionId,
+          conditionKey: conditionCategoryId || '',
+        },
         select: { expressDeliveryEnabled: true },
       });
       if (!fallback) return true;
@@ -297,20 +307,28 @@ class PaymentsService {
         productId: directProduct.productId,
         colorId: directProduct.colorId || null,
         storageOptionId: directProduct.storageOptionId || null,
+        conditionCategoryId: directProduct.conditionCategoryId || null,
       });
     }
 
     if (orderId) {
       const items = await prisma.orderItem.findMany({
         where: { orderId },
-        select: { productId: true, colorId: true, storageOptionId: true },
+        select: {
+          productId: true,
+          colorId: true,
+          storageOptionId: true,
+          conditionCategoryId: true,
+        },
       });
       for (const item of items) {
         const exists = lines.some(
           (line) =>
             line.productId === item.productId &&
             line.colorId === item.colorId &&
-            line.storageOptionId === item.storageOptionId,
+            line.storageOptionId === item.storageOptionId &&
+            (line.conditionCategoryId || null) ===
+              (item.conditionCategoryId || null),
         );
         if (!exists) lines.push(item);
       }
@@ -323,6 +341,7 @@ class PaymentsService {
         line.productId,
         line.colorId,
         line.storageOptionId,
+        line.conditionCategoryId,
       );
       if (!allowed) {
         console.log('[Stripe] Express Delivery hidden — variant flag is off', line);
@@ -630,6 +649,7 @@ class PaymentsService {
           productId: directProduct.productId,
           colorId: directProduct.colorId,
           storageOptionId: directProduct.storageOptionId,
+          conditionKey: directProduct.conditionCategoryId || '',
         },
         select: { expressDeliveryEnabled: true },
       });

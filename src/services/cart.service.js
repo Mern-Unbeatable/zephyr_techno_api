@@ -6,6 +6,8 @@ import {
   resolveStoragePrice,
   resolvePurchaseStock,
   resolveConditionPrice,
+  resolveMatrixPrice,
+  variantStockUniqueWhere,
   formatStorageLabel,
 } from "../utils/stock.js";
 
@@ -41,27 +43,40 @@ class CartService {
       },
     },
     variantStocks: {
-      select: { colorId: true, storageOptionId: true, stockQuantity: true },
+      select: {
+        colorId: true,
+        storageOptionId: true,
+        conditionCategoryId: true,
+        stockQuantity: true,
+        price: true,
+        compareAtPrice: true,
+      },
     },
   };
 
-  async #lookupVariantStock(productId, colorId, storageOptionId, productStock = 0, client = prisma) {
+  async #lookupVariantStock(
+    productId,
+    colorId,
+    storageOptionId,
+    conditionCategoryId = null,
+    productStock = 0,
+    client = prisma,
+  ) {
     const [variantBridge, storageBridge, colorBridge] = await Promise.all([
       colorId && storageOptionId
         ? client.productVariantStock.findUnique({
-            where: {
-              productId_colorId_storageOptionId: {
-                productId,
-                colorId,
-                storageOptionId,
-              },
-            },
-            select: { stockQuantity: true },
+            where: variantStockUniqueWhere(
+              productId,
+              colorId,
+              storageOptionId,
+              conditionCategoryId,
+            ),
+            select: { stockQuantity: true, price: true },
           })
         : Promise.resolve(null),
       client.productStorageOption.findFirst({
         where: { productId, storageOptionId },
-        select: { stockQuantity: true },
+        select: { stockQuantity: true, price: true },
       }),
       colorId
         ? client.productColor.findFirst({
@@ -95,10 +110,28 @@ class CartService {
       ? conditions.find((row) => row.categoryId === conditionCategoryId) || null
       : null;
 
-    if (hasConditions) {
+    const variantBridge =
+      colorId && storageOptionId
+        ? await client.productVariantStock.findUnique({
+            where: variantStockUniqueWhere(
+              productId,
+              colorId,
+              storageOptionId,
+              conditionCategoryId,
+            ),
+            select: { stockQuantity: true, price: true },
+          })
+        : null;
+
+    if (hasConditions && !variantBridge) {
+      return 0;
+    }
+
+    if (variantBridge) {
       return resolvePurchaseStock({
         conditionBridge,
-        hasConditions: true,
+        hasConditions,
+        variantBridge,
         productStock,
       });
     }
@@ -107,6 +140,7 @@ class CartService {
       productId,
       colorId,
       storageOptionId,
+      conditionCategoryId,
       productStock,
       client,
     );
@@ -150,8 +184,17 @@ class CartService {
           include: { category: { select: { id: true, name: true } } },
         },
         variantStocks: {
-          where: { colorId, storageOptionId },
-          select: { stockQuantity: true },
+          where: {
+            colorId,
+            storageOptionId,
+            conditionKey: conditionCategoryId || '',
+          },
+          select: {
+            stockQuantity: true,
+            price: true,
+            compareAtPrice: true,
+            conditionCategoryId: true,
+          },
           take: 1,
         },
       },
@@ -190,11 +233,19 @@ class CartService {
       }
     }
 
+    const variantBridge = product.variantStocks[0] || null;
+    if (!variantBridge) {
+      throw new AppError(
+        "Selected colour / storage / condition combination is not available",
+        400,
+      );
+    }
+
     // Check stock availability for the selected purchase path
     const availableStock = resolvePurchaseStock({
       conditionBridge: selectedCondition,
       hasConditions,
-      variantBridge: product.variantStocks[0] || null,
+      variantBridge,
       colorBridge: product.colors[0],
       storageBridge: product.storageOptions[0],
       productStock: product.stockQuantity,
@@ -519,7 +570,8 @@ class CartService {
     const variantBridge = item.product.variantStocks?.find(
       (row) =>
         row.colorId === item.colorId &&
-        row.storageOptionId === item.storageOptionId,
+        row.storageOptionId === item.storageOptionId &&
+        (row.conditionCategoryId || null) === (item.conditionCategoryId || null),
     );
     const conditions = item.product.productConditions || [];
     const hasConditions = conditions.length > 0;
@@ -536,9 +588,15 @@ class CartService {
       storageBridge,
       productStock: item.product.stockQuantity,
     });
-    const unitPrice = hasConditions
-      ? resolveConditionPrice(conditionBridge, item.product.basePrice)
-      : resolveStoragePrice(storageBridge, item.product.basePrice);
+    const storageFallback = resolveStoragePrice(
+      storageBridge,
+      item.product.basePrice,
+    );
+    const unitPrice = variantBridge
+      ? resolveMatrixPrice(variantBridge, storageFallback)
+      : hasConditions
+        ? resolveConditionPrice(conditionBridge, item.product.basePrice)
+        : storageFallback;
 
     const condition =
       item.conditionCategory ||
