@@ -726,3 +726,11 @@ model BusinessForm {
   @@index([status])
   @@index([isDeleted])
 }
+
+model SiteSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}

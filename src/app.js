@@ -23,6 +23,11 @@ import { adminRouter as adminUsersRoutes } from './routes/users.routes.js';
 import sellRoutes, { adminRouter as adminSellRoutes } from './routes/sell.routes.js';
 import newsletterRoutes from './routes/newsletter.routes.js';
 import stockNotificationRoutes, { adminRouter as adminStockNotificationRoutes } from './routes/stock-notification.routes.js';
+import {
+  publicSiteSettingsRoutes,
+  adminSiteSettingsRoutes,
+} from './routes/site-settings.routes.js';
+import { blockPublicIfMaintenance } from './middleware/maintenance.middleware.js';
 import env from './config/env.js';
 
 const app = express();
@@ -97,7 +102,7 @@ app.get('/health', (req, res) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/cart', cartRoutes);
+app.use('/api/cart', blockPublicIfMaintenance, cartRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin/attributes', adminAttributesRoutes);
 app.use('/api/admin/products', adminProductRoutes);
@@ -106,16 +111,18 @@ app.use('/api/admin/dashboard', adminDashboardRoutes);
 app.use('/api/admin/users', adminUsersRoutes);
 app.use('/api/admin/sell-requests', adminSellRoutes);
 app.use('/api/admin/business-forms', adminBusinessRoutes);
-app.use('/api/contact', contactRoutes);
+app.use('/api/contact', blockPublicIfMaintenance, contactRoutes);
 app.use('/api/admin/contacts', adminContactRoutes);
 app.use('/api/admin/promocodes', adminPromoRoutes);
-app.use('/api/public/product', publicProductRoutes);
+app.use('/api/public/site-settings', publicSiteSettingsRoutes);
+app.use('/api/admin/site-settings', adminSiteSettingsRoutes);
+app.use('/api/public/product', blockPublicIfMaintenance, publicProductRoutes);
 app.get('/api/public/stripe-config', paymentsController.getStripeConfig);
-app.use('/api/public/business-form', businessRoutes);
-app.use('/api/public/newsletter', newsletterRoutes);
-app.use('/api/public/stock-notifications', stockNotificationRoutes);
+app.use('/api/public/business-form', blockPublicIfMaintenance, businessRoutes);
+app.use('/api/public/newsletter', blockPublicIfMaintenance, newsletterRoutes);
+app.use('/api/public/stock-notifications', blockPublicIfMaintenance, stockNotificationRoutes);
 app.use('/api/admin/stock-notifications', adminStockNotificationRoutes);
-app.use('/api/sell', sellRoutes);
+app.use('/api/sell', blockPublicIfMaintenance, sellRoutes);
 
 // 404 — catch all undefined routes
 app.use((req, res) => {
