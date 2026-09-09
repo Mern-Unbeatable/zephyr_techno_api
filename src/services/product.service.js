@@ -1178,7 +1178,8 @@ class ProductService {
     if (colorId) where.colors = { some: { colorId } };
     if (storageOptionId) where.storageOptions = { some: { storageOptionId } };
 
-    // When sortBy=featured, automatically filter to featured products only
+    // Home Featured section uses sortBy=featured (featured products only).
+    // Shop dropdown uses featuredFirst (all products, featured ones sorted to the top).
     if (sortBy === 'featured') {
       where.isFeatured = true;
     }
@@ -1189,8 +1190,12 @@ class ProductService {
     const orderBy = [];
     if (sortBy === 'priceAsc') orderBy.push({ basePrice: 'asc' });
     else if (sortBy === 'priceDesc') orderBy.push({ basePrice: 'desc' });
-    else if (sortBy === 'featured') orderBy.push({ isFeatured: 'desc' });
-    orderBy.push({ createdAt: 'desc' });
+    else if (sortBy === 'featured' || sortBy === 'featuredFirst') {
+      orderBy.push({ isFeatured: 'desc' });
+      orderBy.push({ featuredAt: 'desc' });
+    } else if (sortBy === 'newest') orderBy.push({ createdAt: 'desc' });
+    // Default / All: newest first
+    if (sortBy !== 'newest') orderBy.push({ createdAt: 'desc' });
 
     // Count total and fetch page in parallel — eliminates a sequential DB round-trip
     const [total, products] = await Promise.all([
