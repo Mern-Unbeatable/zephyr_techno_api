@@ -120,7 +120,82 @@ export function minStoragePrice(storageOptions = [], productBasePrice = 0) {
   return Math.min(...prices);
 }
 
+export function sumConditionStocks(productConditions = []) {
+  return productConditions.reduce(
+    (total, entry) => total + Math.max(0, Number(entry?.stockQuantity) || 0),
+    0,
+  );
+}
+
+export function resolveConditionStock(conditionBridge, productStock = 0) {
+  if (conditionBridge && conditionBridge.stockQuantity != null) {
+    return Math.max(0, Number(conditionBridge.stockQuantity) || 0);
+  }
+  return Math.max(0, Number(productStock) || 0);
+}
+
+export function resolveConditionPrice(conditionBridge, productBasePrice = 0) {
+  if (conditionBridge?.price != null && conditionBridge.price !== '') {
+    return Math.max(0, Number(conditionBridge.price) || 0);
+  }
+  return Math.max(0, Number(productBasePrice) || 0);
+}
+
+export function minConditionPrice(productConditions = [], productBasePrice = 0) {
+  if (!productConditions.length) {
+    return Math.max(0, Number(productBasePrice) || 0);
+  }
+
+  const prices = productConditions
+    .map((entry) => resolveConditionPrice(entry, productBasePrice))
+    .filter((price) => price > 0);
+
+  if (!prices.length) {
+    return Math.max(0, Number(productBasePrice) || 0);
+  }
+
+  return Math.min(...prices);
+}
+
+/**
+ * Purchase stock for a cart/order line.
+ * When the listing has ProductConditions, stock comes from the selected condition;
+ * otherwise colour × storage (variant) rules apply.
+ */
+export function resolvePurchaseStock({
+  conditionBridge = null,
+  hasConditions = false,
+  variantBridge = null,
+  colorBridge = null,
+  storageBridge = null,
+  productStock = 0,
+} = {}) {
+  if (hasConditions) {
+    return resolveConditionStock(conditionBridge, productStock);
+  }
+  return resolveVariantStock({
+    variantBridge,
+    colorBridge,
+    storageBridge,
+    productStock,
+  });
+}
+
 export async function syncProductStockTotal(tx, productId) {
+  const conditions = await tx.productCondition.findMany({
+    where: { productId, isDeleted: false },
+    select: { stockQuantity: true },
+  });
+
+  if (conditions.length > 0) {
+    const total = sumConditionStocks(conditions);
+    await tx.product.update({
+      where: { id: productId },
+      data: { stockQuantity: total },
+    });
+    return total;
+  }
+
   const variants = await tx.productVariantStock.findMany({
     where: { productId },
     select: { stockQuantity: true, colorId: true, storageOptionId: true },

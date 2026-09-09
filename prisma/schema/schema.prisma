@@ -142,6 +142,9 @@ model Category {
   id        String    @id @default(uuid())
   name      String    @unique
   products  Product[]
+  productConditions ProductCondition[]
+  cartItems  CartItem[]  @relation("CartItemConditionCategory")
+  orderItems OrderItem[] @relation("OrderItemConditionCategory")
   isDeleted Boolean   @default(false)
   deletedAt DateTime?
 }
@@ -275,6 +278,7 @@ model Product {
   reviews          Review[]
   colors           ProductColor[]
   storageOptions   ProductStorageOption[]
+  productConditions ProductCondition[]
   variantStocks    ProductVariantStock[]
   cartItems        CartItem[]
   orderItems       OrderItem[]
@@ -415,6 +419,28 @@ model ProductStorageOption {
   @@index([productId])
 }
 
+/// Buy-side condition options on a listing (e.g. New Sealed / Used - Excellent).
+/// Colours & storage stay shared; price + stock are set per condition.
+model ProductCondition {
+  id             String   @id @default(uuid())
+  productId      String
+  categoryId     String
+  price          Decimal  @db.Decimal(12, 2)
+  compareAtPrice Decimal? @db.Decimal(12, 2)
+  stockQuantity  Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  isDeleted      Boolean  @default(false)
+  deletedAt      DateTime?
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@unique([productId, categoryId])
+  @@index([productId])
+  @@index([categoryId])
+}
+
 /// Stock for a specific color × storage combination (inventory source of truth).
 model ProductVariantStock {
   id                     String  @id @default(uuid())
@@ -458,6 +484,8 @@ model CartItem {
   productId       String
   colorId         String
   storageOptionId String
+  /// Selected buy-side condition (Category id), when the listing offers conditions.
+  conditionCategoryId String?
   quantity        Int      @default(1)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -466,11 +494,13 @@ model CartItem {
   product       Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
   color         Color         @relation(fields: [colorId], references: [id])
   storageOption StorageOption @relation(fields: [storageOptionId], references: [id])
+  conditionCategory Category? @relation("CartItemConditionCategory", fields: [conditionCategoryId], references: [id])
   isDeleted     Boolean       @default(false)
   deletedAt     DateTime?
 
   @@index([cartId])
   @@index([productId])
+  @@index([conditionCategoryId])
 }
 
 model Order {
@@ -515,6 +545,8 @@ model OrderItem {
   productId       String
   colorId         String
   storageOptionId String
+  /// Selected buy-side condition (Category id), when applicable.
+  conditionCategoryId String?
   quantity        Int
   priceAtPurchase Decimal @db.Decimal(12, 2)
 
@@ -522,11 +554,13 @@ model OrderItem {
   product       Product       @relation(fields: [productId], references: [id])
   color         Color         @relation(fields: [colorId], references: [id])
   storageOption StorageOption @relation(fields: [storageOptionId], references: [id])
+  conditionCategory Category? @relation("OrderItemConditionCategory", fields: [conditionCategoryId], references: [id])
   isDeleted     Boolean       @default(false)
   deletedAt     DateTime?
 
   @@index([orderId])
   @@index([productId])
+  @@index([conditionCategoryId])
 }
 
 model StockNotification {

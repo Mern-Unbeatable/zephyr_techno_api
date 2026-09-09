@@ -1,7 +1,13 @@
 import prisma from "../utils/prisma.js";
 import AppError from "../utils/app-error.js";
 import { resolveProductThumbnail } from "../utils/url.js";
-import { resolveVariantStock, resolveStoragePrice, formatStorageLabel } from "../utils/stock.js";
+import {
+  resolveVariantStock,
+  resolveStoragePrice,
+  resolvePurchaseStock,
+  resolveConditionPrice,
+  formatStorageLabel,
+} from "../utils/stock.js";
 
 /**
  * CartService
@@ -12,6 +18,31 @@ class CartService {
     where: { isDeleted: false },
     orderBy: { displayOrder: 'asc' },
     select: { imageUrl: true, colorId: true },
+  };
+
+  #productStockInclude = {
+    productGalleries: this.#galleryInclude,
+    colors: {
+      where: { isDeleted: false },
+      select: { colorId: true, stockQuantity: true },
+    },
+    storageOptions: {
+      where: { isDeleted: false },
+      select: { storageOptionId: true, stockQuantity: true, price: true },
+    },
+    productConditions: {
+      where: { isDeleted: false },
+      select: {
+        categoryId: true,
+        stockQuantity: true,
+        price: true,
+        compareAtPrice: true,
+        category: { select: { id: true, name: true } },
+      },
+    },
+    variantStocks: {
+      select: { colorId: true, storageOptionId: true, stockQuantity: true },
+    },
   };
 
   async #lookupVariantStock(productId, colorId, storageOptionId, productStock = 0, client = prisma) {
@@ -47,13 +78,49 @@ class CartService {
     });
   }
 
+  async #lookupPurchaseStock({
+    productId,
+    colorId,
+    storageOptionId,
+    conditionCategoryId = null,
+    productStock = 0,
+    client = prisma,
+  }) {
+    const conditions = await client.productCondition.findMany({
+      where: { productId, isDeleted: false },
+      select: { categoryId: true, stockQuantity: true },
+    });
+    const hasConditions = conditions.length > 0;
+    const conditionBridge = hasConditions
+      ? conditions.find((row) => row.categoryId === conditionCategoryId) || null
+      : null;
+
+    if (hasConditions) {
+      return resolvePurchaseStock({
+        conditionBridge,
+        hasConditions: true,
+        productStock,
+      });
+    }
+
+    const availableStock = await this.#lookupVariantStock(
+      productId,
+      colorId,
+      storageOptionId,
+      productStock,
+      client,
+    );
+    return availableStock;
+  }
+
   /**
    * Add product to cart with selected options
    * Supports both authenticated users (userId) and guests (guestSessionId)
-   * User selects: color, storage when adding to cart
+   * User selects: color, storage, and condition (when listing has conditions)
    */
   async addToCart(userId, guestSessionId, data) {
     const { productId, colorId, storageOptionId, quantity } = data;
+    const conditionCategoryId = data.conditionCategoryId || null;
 
     // Validate that either userId or guestSessionId is provided
     if (!userId && !guestSessionId) {
@@ -77,6 +144,10 @@ class CartService {
         storageOptions: {
           where: { storageOptionId, isDeleted: false },
           include: { storageOption: true },
+        },
+        productConditions: {
+          where: { isDeleted: false },
+          include: { category: { select: { id: true, name: true } } },
         },
         variantStocks: {
           where: { colorId, storageOptionId },
@@ -102,8 +173,27 @@ class CartService {
       throw new AppError("Selected storage option is not available for this product", 400);
     }
 
-    // Check stock availability for the selected color + storage combo
-    const availableStock = resolveVariantStock({
+    const hasConditions = product.productConditions.length > 0;
+    let selectedCondition = null;
+    if (hasConditions) {
+      if (!conditionCategoryId) {
+        throw new AppError("Condition is required for this product", 400);
+      }
+      selectedCondition = product.productConditions.find(
+        (row) => row.categoryId === conditionCategoryId,
+      );
+      if (!selectedCondition) {
+        throw new AppError(
+          "Selected condition is not available for this product",
+          400,
+        );
+      }
+    }
+
+    // Check stock availability for the selected purchase path
+    const availableStock = resolvePurchaseStock({
+      conditionBridge: selectedCondition,
+      hasConditions,
       variantBridge: product.variantStocks[0] || null,
       colorBridge: product.colors[0],
       storageBridge: product.storageOptions[0],
@@ -138,6 +228,7 @@ class CartService {
         productId,
         colorId,
         storageOptionId,
+        conditionCategoryId: conditionCategoryId || null,
       },
     });
 
@@ -166,23 +257,11 @@ class CartService {
         data: { quantity: newQuantity },
         include: {
           product: {
-            include: {
-              productGalleries: this.#galleryInclude,
-              colors: {
-                where: { isDeleted: false },
-                select: { colorId: true, stockQuantity: true },
-              },
-              storageOptions: {
-                where: { isDeleted: false },
-                select: { storageOptionId: true, stockQuantity: true, price: true },
-              },
-              variantStocks: {
-                select: { colorId: true, storageOptionId: true, stockQuantity: true },
-              },
-            },
+            include: this.#productStockInclude,
           },
           color: true,
           storageOption: true,
+          conditionCategory: true,
         },
       });
 
@@ -191,6 +270,7 @@ class CartService {
         product,
         color: product.colors[0].color,
         storageOption: product.storageOptions[0].storageOption,
+        conditionCategory: selectedCondition?.category || null,
       });
     }
 
@@ -201,27 +281,16 @@ class CartService {
         productId,
         colorId,
         storageOptionId,
+        conditionCategoryId: conditionCategoryId || null,
         quantity: qty,
       },
       include: {
         product: {
-          include: {
-            productGalleries: this.#galleryInclude,
-            colors: {
-              where: { isDeleted: false },
-              select: { colorId: true, stockQuantity: true },
-            },
-            storageOptions: {
-              where: { isDeleted: false },
-              select: { storageOptionId: true, stockQuantity: true, price: true },
-            },
-            variantStocks: {
-              select: { colorId: true, storageOptionId: true, stockQuantity: true },
-            },
-          },
+          include: this.#productStockInclude,
         },
         color: true,
         storageOption: true,
+        conditionCategory: true,
       },
     });
 
@@ -247,23 +316,11 @@ class CartService {
           where: { isDeleted: false },
           include: {
             product: {
-              include: {
-                productGalleries: this.#galleryInclude,
-                colors: {
-                  where: { isDeleted: false },
-                  select: { colorId: true, stockQuantity: true },
-                },
-                storageOptions: {
-                  where: { isDeleted: false },
-                  select: { storageOptionId: true, stockQuantity: true, price: true },
-                },
-                variantStocks: {
-                  select: { colorId: true, storageOptionId: true, stockQuantity: true },
-                },
-              },
+              include: this.#productStockInclude,
             },
             color: true,
             storageOption: true,
+            conditionCategory: true,
           },
           orderBy: { createdAt: 'desc' },
         },
@@ -329,12 +386,14 @@ class CartService {
               productId: cartItem.productId,
               colorId: cartItem.colorId,
               storageOptionId: cartItem.storageOptionId,
+              conditionCategoryId: cartItem.conditionCategoryId || null,
             },
             include: { product: true, cart: true },
           });
           if (!migrated) throw new AppError('Cart item not found after migration', 404);
           cartItemId = migrated.id;
           cartItem.product = migrated.product;
+          cartItem.conditionCategoryId = migrated.conditionCategoryId;
         } else {
           throw new AppError('Unauthorized to modify this cart item', 403);
         }
@@ -344,13 +403,14 @@ class CartService {
       throw new AppError('Unauthorized to modify this cart item', 403);
     }
 
-    // Check stock for the selected color + storage combo
-    const availableStock = await this.#lookupVariantStock(
-      cartItem.productId,
-      cartItem.colorId,
-      cartItem.storageOptionId,
-      cartItem.product.stockQuantity,
-    );
+    // Check stock for the selected purchase path
+    const availableStock = await this.#lookupPurchaseStock({
+      productId: cartItem.productId,
+      colorId: cartItem.colorId,
+      storageOptionId: cartItem.storageOptionId,
+      conditionCategoryId: cartItem.conditionCategoryId,
+      productStock: cartItem.product.stockQuantity,
+    });
     if (availableStock < qty) {
       throw new AppError(`Only ${availableStock} items in stock`, 400);
     }
@@ -360,23 +420,11 @@ class CartService {
       data: { quantity: qty },
       include: {
         product: {
-          include: {
-            productGalleries: this.#galleryInclude,
-            colors: {
-              where: { isDeleted: false },
-              select: { colorId: true, stockQuantity: true },
-            },
-            storageOptions: {
-              where: { isDeleted: false },
-              select: { storageOptionId: true, stockQuantity: true, price: true },
-            },
-            variantStocks: {
-              select: { colorId: true, storageOptionId: true, stockQuantity: true },
-            },
-          },
+          include: this.#productStockInclude,
         },
         color: true,
         storageOption: true,
+        conditionCategory: true,
       },
     });
 
@@ -419,6 +467,7 @@ class CartService {
               productId: cartItem.productId,
               colorId: cartItem.colorId,
               storageOptionId: cartItem.storageOptionId,
+              conditionCategoryId: cartItem.conditionCategoryId || null,
             },
           });
           if (migrated) await prisma.cartItem.delete({ where: { id: migrated.id } });
@@ -472,16 +521,31 @@ class CartService {
         row.colorId === item.colorId &&
         row.storageOptionId === item.storageOptionId,
     );
-    const availableStock = resolveVariantStock({
+    const conditions = item.product.productConditions || [];
+    const hasConditions = conditions.length > 0;
+    const conditionBridge = hasConditions
+      ? conditions.find((row) => row.categoryId === item.conditionCategoryId) ||
+        null
+      : null;
+
+    const availableStock = resolvePurchaseStock({
+      conditionBridge,
+      hasConditions,
       variantBridge,
       colorBridge,
       storageBridge,
       productStock: item.product.stockQuantity,
     });
-    const unitPrice = resolveStoragePrice(
-      storageBridge,
-      item.product.basePrice,
-    );
+    const unitPrice = hasConditions
+      ? resolveConditionPrice(conditionBridge, item.product.basePrice)
+      : resolveStoragePrice(storageBridge, item.product.basePrice);
+
+    const condition =
+      item.conditionCategory ||
+      conditionBridge?.category ||
+      (item.conditionCategoryId
+        ? { id: item.conditionCategoryId, name: null }
+        : null);
 
     return {
       id: item.id,
@@ -506,6 +570,14 @@ class CartService {
           id: item.storageOption.id,
           name: formatStorageLabel(item.storageOption.name),
         },
+        ...(condition
+          ? {
+              condition: {
+                id: condition.id,
+                name: condition.name,
+              },
+            }
+          : {}),
       },
       // Calculate item total (price × quantity)
       total: unitPrice * item.quantity,
@@ -555,6 +627,7 @@ class CartService {
             productId: guestItem.productId,
             colorId: guestItem.colorId,
             storageOptionId: guestItem.storageOptionId,
+            conditionCategoryId: guestItem.conditionCategoryId || null,
           },
         });
 
@@ -567,12 +640,13 @@ class CartService {
             where: { id: guestItem.productId },
             select: { stockQuantity: true },
           });
-          const availableStock = await this.#lookupVariantStock(
-            guestItem.productId,
-            guestItem.colorId,
-            guestItem.storageOptionId,
-            product?.stockQuantity ?? 0,
-          );
+          const availableStock = await this.#lookupPurchaseStock({
+            productId: guestItem.productId,
+            colorId: guestItem.colorId,
+            storageOptionId: guestItem.storageOptionId,
+            conditionCategoryId: guestItem.conditionCategoryId,
+            productStock: product?.stockQuantity ?? 0,
+          });
 
           if (availableStock >= newQuantity) {
             await prisma.cartItem.update({
@@ -588,6 +662,7 @@ class CartService {
               productId: guestItem.productId,
               colorId: guestItem.colorId,
               storageOptionId: guestItem.storageOptionId,
+              conditionCategoryId: guestItem.conditionCategoryId || null,
               quantity: guestItem.quantity,
             },
           });

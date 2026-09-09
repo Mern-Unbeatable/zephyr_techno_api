@@ -20,7 +20,7 @@ class PaymentsController {
       });
     }
 
-    const { shippingAddress, cartItemIds, shippingMethod, shippingCost, promoCode, productId, colorId, storageOptionId, quantity, collectAddressOnStripe, paymentMethodTypes } = req.body;
+    const { shippingAddress, cartItemIds, shippingMethod, shippingCost, promoCode, productId, colorId, storageOptionId, conditionCategoryId, quantity, collectAddressOnStripe, paymentMethodTypes } = req.body;
     const collectOnStripe = Boolean(collectAddressOnStripe);
 
     // Guest checkout requires email unless Stripe will collect contact + address
@@ -42,6 +42,7 @@ class PaymentsController {
         productId,
         colorId: colorId || null,
         storageOptionId: storageOptionId || null,
+        conditionCategoryId: conditionCategoryId || null,
         quantity: parseInt(quantity) || 1,
       };
     }
@@ -117,7 +118,7 @@ class PaymentsController {
       });
     }
 
-    const { productId, colorId, storageOptionId, quantity, shippingMethod, shippingCost, shippingAddress, paymentMethodTypes } = req.body;
+    const { productId, colorId, storageOptionId, conditionCategoryId, quantity, shippingMethod, shippingCost, shippingAddress, paymentMethodTypes } = req.body;
 
     if (!productId) {
       return res.status(400).json({ success: false, message: 'productId is required' });
@@ -127,6 +128,7 @@ class PaymentsController {
       productId,
       colorId: colorId || null,
       storageOptionId: storageOptionId || null,
+      conditionCategoryId: conditionCategoryId || null,
       quantity: parseInt(quantity, 10) || 1,
     };
 

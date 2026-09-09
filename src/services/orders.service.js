@@ -3,7 +3,7 @@ import AppError from "../utils/app-error.js";
 import Mailer from "../utils/mailer.js";
 import { buildImageUrl, resolveProductThumbnail } from "../utils/url.js";
 import promoService from "./promo.service.js";
-import { resolveVariantStock, resolveStoragePrice, syncProductStockTotal, formatStorageLabel } from "../utils/stock.js";
+import { resolveVariantStock, resolveStoragePrice, resolvePurchaseStock, resolveConditionPrice, syncProductStockTotal, formatStorageLabel } from "../utils/stock.js";
 
 /**
  * Draft orders (created before Stripe checkout) hold a placeholder shipping
@@ -88,6 +88,22 @@ class OrderService {
   };
 
   async #getItemVariantStock(item, client = prisma) {
+    const conditions = await client.productCondition.findMany({
+      where: { productId: item.productId, isDeleted: false },
+      select: { categoryId: true, stockQuantity: true },
+    });
+    const hasConditions = conditions.length > 0;
+    if (hasConditions) {
+      const conditionBridge =
+        conditions.find((row) => row.categoryId === item.conditionCategoryId) ||
+        null;
+      return resolvePurchaseStock({
+        conditionBridge,
+        hasConditions: true,
+        productStock: item.product?.stockQuantity ?? 0,
+      });
+    }
+
     const [variantBridge, storageBridge, colorBridge] = await Promise.all([
       item.colorId && item.storageOptionId
         ? client.productVariantStock.findUnique({
@@ -127,6 +143,18 @@ class OrderService {
   }
 
   async #getItemUnitPrice(item) {
+    if (item.conditionCategoryId) {
+      const conditionBridge = await prisma.productCondition.findFirst({
+        where: {
+          productId: item.productId,
+          categoryId: item.conditionCategoryId,
+          isDeleted: false,
+        },
+        select: { price: true },
+      });
+      return resolveConditionPrice(conditionBridge, item.product.basePrice);
+    }
+
     const bridge = await prisma.productStorageOption.findFirst({
       where: {
         productId: item.productId,
@@ -149,7 +177,7 @@ class OrderService {
    * @param {string} data.shippingMethod - Optional: e.g., "Standard Delivery", "Express Delivery"
    * @param {number} data.shippingCost - Optional: shipping cost (default 0)
    * @param {string} data.promoCode - Optional: promo code to apply
-   * @param {Object} data.directProduct - Optional: direct product checkout { productId, colorId?, storageOptionId?, quantity }
+   * @param {Object} data.directProduct - Optional: direct product checkout { productId, colorId?, storageOptionId?, conditionCategoryId?, quantity }
    */
   async createOrder(userId, guestSessionId, guestEmail, data) {
     const { shippingAddress, paymentMethod, cartItemIds, shippingMethod, shippingCost = 0, promoCode, directProduct } = data;
@@ -176,6 +204,7 @@ class OrderService {
     // Handle direct product checkout
     if (directProduct) {
       const { productId, colorId, storageOptionId, quantity } = directProduct;
+      const conditionCategoryId = directProduct.conditionCategoryId || null;
       
       if (!productId) {
         throw new AppError("Product ID is required for direct checkout", 400);
@@ -199,12 +228,37 @@ class OrderService {
         throw new AppError("Product not found", 404);
       }
 
+      if (conditionCategoryId) {
+        const condition = await prisma.productCondition.findFirst({
+          where: {
+            productId,
+            categoryId: conditionCategoryId,
+            isDeleted: false,
+          },
+          select: { id: true },
+        });
+        if (!condition) {
+          throw new AppError(
+            "Selected condition is not available for this product",
+            400,
+          );
+        }
+      } else {
+        const hasConditions = await prisma.productCondition.count({
+          where: { productId, isDeleted: false },
+        });
+        if (hasConditions > 0) {
+          throw new AppError("Condition is required for this product", 400);
+        }
+      }
+
       // Build cart items structure for consistency with cart-based checkout
       cartItems = [{
         id: `direct-${productId}`,
         productId,
         colorId,
         storageOptionId,
+        conditionCategoryId,
         quantity,
         product,
         color: colorId ? { id: colorId, name: '' } : null,
@@ -240,6 +294,7 @@ class OrderService {
           },
           color: { select: { id: true, name: true } },
           storageOption: { select: { id: true, name: true } },
+          conditionCategory: { select: { id: true, name: true } },
         },
       });
 
@@ -349,6 +404,7 @@ class OrderService {
               productId: item.productId,
               colorId: item.colorId,
               storageOptionId: item.storageOptionId,
+              conditionCategoryId: item.conditionCategoryId || null,
               quantity: item.quantity,
               priceAtPurchase: item.unitPrice,
             })),
@@ -444,6 +500,7 @@ class OrderService {
               },
               color: { select: { id: true, name: true } },
               storageOption: { select: { id: true, name: true } },
+              conditionCategory: { select: { id: true, name: true } },
             },
           },
         },
@@ -500,6 +557,7 @@ class OrderService {
             },
             color: { select: { id: true, name: true } },
             storageOption: { select: { id: true, name: true } },
+            conditionCategory: { select: { id: true, name: true } },
           },
         },
       },
@@ -613,6 +671,7 @@ class OrderService {
             },
             color: { select: { id: true, name: true } },
             storageOption: { select: { id: true, name: true } },
+            conditionCategory: { select: { id: true, name: true } },
           },
         },
       },
@@ -664,6 +723,7 @@ class OrderService {
             },
             color: { select: { id: true, name: true } },
             storageOption: { select: { id: true, name: true } },
+            conditionCategory: { select: { id: true, name: true } },
           },
         },
       },
@@ -705,6 +765,7 @@ class OrderService {
             },
             color: { select: { id: true, name: true } },
             storageOption: { select: { id: true, name: true } },
+            conditionCategory: { select: { id: true, name: true } },
           },
         },
       },
@@ -758,10 +819,19 @@ class OrderService {
         }
       }
 
-      // Decrement matrix (color × storage) stock only after payment is confirmed.
+      // Decrement condition stock when selected; otherwise colour × storage / storage.
       const touchedProductIds = new Set();
       for (const item of existing.orderItems) {
-        if (item.colorId && item.storageOptionId) {
+        if (item.conditionCategoryId) {
+          await tx.productCondition.updateMany({
+            where: {
+              productId: item.productId,
+              categoryId: item.conditionCategoryId,
+              isDeleted: false,
+            },
+            data: { stockQuantity: { decrement: item.quantity } },
+          });
+        } else if (item.colorId && item.storageOptionId) {
           await tx.productVariantStock.updateMany({
             where: {
               productId: item.productId,
@@ -795,6 +865,7 @@ class OrderService {
             productId: item.productId,
             colorId: item.colorId,
             storageOptionId: item.storageOptionId,
+            conditionCategoryId: item.conditionCategoryId || null,
           }));
 
           if (itemMatchers.length > 0) {
@@ -869,6 +940,7 @@ class OrderService {
               },
               color: { select: { id: true, name: true } },
               storageOption: { select: { id: true, name: true } },
+              conditionCategory: { select: { id: true, name: true } },
             },
           },
         },
@@ -937,6 +1009,7 @@ class OrderService {
               },
               color: { select: { id: true, name: true } },
               storageOption: { select: { id: true, name: true } },
+              conditionCategory: { select: { id: true, name: true } },
             },
           },
         },
@@ -1218,6 +1291,14 @@ class OrderService {
               id: item.storageOption.id,
               name: formatStorageLabel(item.storageOption.name),
             },
+            ...(item.conditionCategory
+              ? {
+                  condition: {
+                    id: item.conditionCategory.id,
+                    name: item.conditionCategory.name,
+                  },
+                }
+              : {}),
           },
           subtotal: parseFloat(item.priceAtPurchase) * item.quantity,
         };
