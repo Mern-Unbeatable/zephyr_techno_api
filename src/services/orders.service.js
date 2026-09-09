@@ -704,8 +704,11 @@ class OrderService {
 
   /**
    * Update order status (Admin only)
+   * Modal "Mark as Shipped" may pass courierName + trackingNumber to persist
+   * details and email the customer. Menu status change to SHIPPED is allowed
+   * without those fields (status only, no email).
    */
-  async updateOrderStatus(orderId, status) {
+  async updateOrderStatus(orderId, status, extras = {}) {
     const validStatuses = [
       "PENDING",
       "PROCESSING",
@@ -721,9 +724,133 @@ class OrderService {
       );
     }
 
+    const courierName =
+      typeof extras.courierName === "string" ? extras.courierName.trim() : "";
+    const trackingNumber =
+      typeof extras.trackingNumber === "string"
+        ? extras.trackingNumber.trim()
+        : "";
+
+    const existing = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, orderStatus: true, isDeleted: true },
+    });
+    if (!existing || existing.isDeleted) {
+      throw new AppError("Order not found", 404);
+    }
+
+    const data = { orderStatus: status };
+    if (status === "SHIPPED") {
+      if (courierName) data.courierName = courierName;
+      if (trackingNumber) data.trackingNumber = trackingNumber;
+    }
+
     const order = await prisma.order.update({
       where: { id: orderId },
-      data: { orderStatus: status },
+      data,
+      include: {
+        address: {
+          select: { fullName: true, phone: true, street: true, city: true, state: true, zipCode: true, country: true },
+        },
+        user: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+        orderItems: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                title: true,
+                productGalleries: this.#galleryInclude,
+              },
+            },
+            color: { select: { id: true, name: true } },
+            storageOption: { select: { id: true, name: true } },
+            conditionCategory: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+
+    const finalCourier = courierName || order.courierName || "";
+    const finalTracking = trackingNumber || order.trackingNumber || "";
+    const fromShipModal = Boolean(courierName && trackingNumber);
+    const becameShipped =
+      status === "SHIPPED" && existing.orderStatus !== "SHIPPED";
+
+    // Email when:
+    // - status becomes SHIPPED and courier+tracking exist (saved via Done, or sent now), or
+    // - Mark as Shipped from modal (explicit resend with details)
+    const shouldNotifyShip =
+      status === "SHIPPED" &&
+      Boolean(finalCourier && finalTracking) &&
+      (becameShipped || fromShipModal);
+
+    if (shouldNotifyShip) {
+      const customerEmail = order.user?.email || order.guestEmail || null;
+      if (customerEmail) {
+        this.mailer
+          .sendShippingConfirmation({
+            to: customerEmail,
+            recipientName: order.address?.fullName,
+            order,
+            courierName: finalCourier,
+            trackingNumber: finalTracking,
+          })
+          .then(() => {
+            console.log(
+              `[Mailer] Shipping confirmation sent to ${customerEmail} for ${order.stringId}`,
+            );
+          })
+          .catch((err) =>
+            console.error("[Mailer] Failed to send shipping confirmation:", err),
+          );
+      } else {
+        console.warn(
+          `[Mailer] No customer email for shipped order ${order.stringId}`,
+        );
+      }
+    } else if (status === "SHIPPED" && becameShipped && !finalCourier) {
+      console.warn(
+        `[Mailer] Skipped shipping email for ${order.stringId}: no courier/tracking. Use truck modal (Done / Mark as Shipped).`,
+      );
+    }
+
+    return this.#formatOrder(order, true);
+  }
+
+  /**
+   * Save courier / tracking without changing status (Admin only)
+   */
+  async updateOrderShippingDetails(orderId, { courierName, trackingNumber }) {
+    const name = typeof courierName === "string" ? courierName.trim() : "";
+    const tracking =
+      typeof trackingNumber === "string" ? trackingNumber.trim() : "";
+
+    if (!name) {
+      throw new AppError("Courier provider name is required", 400);
+    }
+    if (!tracking) {
+      throw new AppError("Tracking link is required", 400);
+    }
+
+    const existing = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, isDeleted: true },
+    });
+    if (!existing || existing.isDeleted) {
+      throw new AppError("Order not found", 404);
+    }
+
+    const order = await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        courierName: name,
+        trackingNumber: tracking,
+      },
       include: {
         address: {
           select: { fullName: true, phone: true, street: true, city: true, state: true, zipCode: true, country: true },
@@ -1274,6 +1401,8 @@ class OrderService {
       status: order.orderStatus,
       paymentStatus: order.paymentStatus,
       paymentMethod: order.paymentMethod,
+      courierName: order.courierName || null,
+      trackingNumber: order.trackingNumber || null,
       shippingAddress: order.address ? {
         fullName: order.address.fullName,
         phone: order.address.phone,

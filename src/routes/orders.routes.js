@@ -18,6 +18,7 @@ adminRouter.get('/stats', orderController.getOrderStats);
 adminRouter.get('/:id', orderController.getOrderById);
 adminRouter.get('/', orderController.getAllOrders);
 adminRouter.patch('/:id/status', orderController.updateOrderStatus);
+adminRouter.patch('/:id/shipping', orderController.updateOrderShipping);
 adminRouter.delete('/:id', orderController.deleteOrder);
 
 export default publicRouter;

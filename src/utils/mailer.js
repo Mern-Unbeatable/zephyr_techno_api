@@ -321,6 +321,44 @@ class Mailer {
     });
   }
 
+  async sendShippingConfirmation({ to, recipientName, order, courierName, trackingNumber }) {
+    const greeting = recipientName ? `Hello ${recipientName},` : 'Hello,';
+    const safeCourier = this.#escapeHtml(courierName || 'Courier');
+    const trackingRaw = String(trackingNumber || '').trim();
+    const trackingIsUrl = /^https?:\/\//i.test(trackingRaw);
+    const safeTrackingDisplay = this.#escapeHtml(trackingRaw);
+    const trackingHtml = trackingIsUrl
+      ? `<a href="${this.#escapeHtml(trackingRaw)}" style="color:#1FA3C2;word-break:break-all;">${safeTrackingDisplay}</a>`
+      : safeTrackingDisplay;
+
+    const body = `
+      <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.6;color:#374151;">
+        <h2 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#052041;">Your Order Has Shipped</h2>
+        <p style="margin:0 0 12px;">${this.#escapeHtml(greeting)}</p>
+        <p style="margin:0 0 16px;">Good news — your Zephyr Technology order <strong style="color:#052041;">${this.#escapeHtml(order.stringId)}</strong> is on its way.</p>
+        <p style="margin:0 0 8px;"><strong style="color:#052041;">Courier:</strong> ${safeCourier}</p>
+        <p style="margin:0 0 16px;"><strong style="color:#052041;">Tracking:</strong> ${trackingHtml}</p>
+        ${trackingIsUrl ? `
+        <p style="margin:0 0 20px;">
+          <a href="${this.#escapeHtml(trackingRaw)}" style="display:inline-block;padding:12px 20px;background:#1FA3C2;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">
+            Track Package
+          </a>
+        </p>` : ''}
+      </div>
+      ${this.#buildOrderSummaryHtml(order)}
+    `;
+
+    return this.#sendMail({
+      to,
+      subject: `Your order has shipped — ${order.stringId}`,
+      html: this.#wrapPlainHtml(body),
+      text: this.#buildOrderPlainText(order, {
+        title: 'Your Order Has Shipped',
+        intro: `Your order ${order.stringId} is on its way.\nCourier: ${courierName || 'Courier'}\nTracking: ${trackingRaw}`,
+      }),
+    });
+  }
+
   async sendNewsletterSubscriptionNotification({ subscriberEmail }) {
     const safeEmail = String(subscriberEmail)
       .replace(/&/g, '&amp;')

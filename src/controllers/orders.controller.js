@@ -141,13 +141,36 @@ class OrderController {
    */
   updateOrderStatus = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, courierName, trackingNumber } = req.body;
 
-    const order = await orderService.updateOrderStatus(id, status);
+    const order = await orderService.updateOrderStatus(id, status, {
+      courierName,
+      trackingNumber,
+    });
 
     res.status(200).json({
       success: true,
       message: "Order status updated",
+      data: order,
+    });
+  });
+
+  /**
+   * PATCH /api/admin/orders/:id/shipping
+   * Save courier + tracking without changing status
+   */
+  updateOrderShipping = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { courierName, trackingNumber } = req.body;
+
+    const order = await orderService.updateOrderShippingDetails(id, {
+      courierName,
+      trackingNumber,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Shipping details saved",
       data: order,
     });
   });

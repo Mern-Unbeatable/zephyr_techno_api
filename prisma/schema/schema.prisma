@@ -531,6 +531,7 @@ model Order {
   paymentStatus      PaymentStatus @default(PENDING)
   paymentMethod      PaymentMethod @default(STRIPE)
   paymentIntentId    String?
+  courierName        String?
   trackingNumber     String?
   cancellationReason String?
   cancelledAt        DateTime?
