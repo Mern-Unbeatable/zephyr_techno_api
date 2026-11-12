@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate, adminGuard } from '../middleware/auth.middleware.js';
 import upload from '../middleware/upload.middleware.js';
 import ctrl from '../controllers/attributes.controller.js';
+import bulkImportCtrl from '../controllers/bulk-import.controller.js';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -45,6 +46,7 @@ adminAttributesRoutes.delete('/conditions/:id', ctrl.deleteCondition);
 // ─── CONDITION-MODEL PRICES (per-model pricing)
 adminAttributesRoutes.get('/condition-model-prices', ctrl.getAllConditionModelPrices);
 adminAttributesRoutes.post('/condition-model-prices', ctrl.createConditionModelPrice);
+adminAttributesRoutes.post('/condition-model-prices/import', bulkImportCtrl.importConditionModelPrices);
 adminAttributesRoutes.get('/condition-model-prices/:id', ctrl.getConditionModelPriceById);
 adminAttributesRoutes.patch('/condition-model-prices/:id', ctrl.updateConditionModelPrice);
 adminAttributesRoutes.delete('/condition-model-prices/:id', ctrl.deleteConditionModelPrice);

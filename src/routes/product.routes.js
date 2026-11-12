@@ -3,6 +3,7 @@ import productController from '../controllers/product.controller.js';
 import paymentsController from '../controllers/payments.controller.js';
 import attributesController from '../controllers/attributes.controller.js';
 import promoController from '../controllers/promo.controller.js';
+import bulkImportController from '../controllers/bulk-import.controller.js';
 import { authenticate, adminGuard, optionalAuthenticate } from '../middleware/auth.middleware.js';
 import upload from '../middleware/upload.middleware.js';
 import normalizeProductImages from '../middleware/normalize-product-images.middleware.js';
@@ -30,6 +31,8 @@ adminRouter.post(
   productController.createProduct,
 );
 adminRouter.get('/', productController.getAllProducts);
+adminRouter.get('/variants/export', bulkImportController.exportProductVariants);
+adminRouter.post('/variants/import', bulkImportController.importProductVariants);
 adminRouter.get('/:id', productController.getProductById);
 adminRouter.patch(
   '/:id',

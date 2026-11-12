@@ -897,6 +897,39 @@ class ProductService {
     });
   }
 
+  /**
+   * Reuse gallery images from another listing (Duplicate Listing).
+   * Only gallery IDs are accepted so callers cannot point at arbitrary files.
+   */
+  async #buildGalleriesFromCopies(rawCopies, allowedColorIds = []) {
+    const copies = this.#parseJsonField(rawCopies, 'copiedImages');
+    if (!Array.isArray(copies) || copies.length === 0) return [];
+
+    const ids = [...new Set(copies.map((entry) => entry?.id).filter(Boolean))];
+    if (!ids.length) return [];
+
+    const sources = await prisma.productGallery.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, imageUrl: true },
+    });
+    const urlById = new Map(sources.map((source) => [source.id, source.imageUrl]));
+    const allowed = new Set(allowedColorIds);
+
+    return copies
+      .filter((entry) => entry?.id && urlById.has(entry.id))
+      .map((entry, index) => {
+        const colorId = entry.colorId || null;
+        if (colorId && !allowed.has(colorId)) {
+          throw new AppError('Image colorId must match a selected product color.', 400);
+        }
+        return {
+          imageUrl: urlById.get(entry.id),
+          colorId,
+          displayOrder: Number.isFinite(entry.displayOrder) ? entry.displayOrder : index,
+        };
+      });
+  }
+
   #toNestedGalleryCreate({ imageUrl, colorId, displayOrder }) {
     return {
       imageUrl,
@@ -1350,6 +1383,10 @@ class ProductService {
       );
     }
 
+    productGalleries = productGalleries.concat(
+      await this.#buildGalleriesFromCopies(data.copiedImages, colors),
+    );
+
     // Process Included Items (What's Included)
     let productIncludedItems = [];
     if (includedItems) {
@@ -1497,11 +1534,6 @@ class ProductService {
           seriesId,
           deviceModelId,
           ...(resolvedConditionId ? { conditionId: resolvedConditionId } : {}),
-          productGalleries: {
-            create: productGalleries.map((gallery) =>
-              this.#toNestedGalleryCreate(gallery),
-            ),
-          },
           productFaqs: { create: productFaqs },
           highlights: { create: productHighlights },
           specifications: { create: productSpecifications },
@@ -1571,6 +1603,15 @@ class ProductService {
           id: true,
         },
       });
+
+      if (productGalleries.length > 0) {
+        await tx.productGallery.createMany({
+          data: productGalleries.map((gallery) => ({
+            ...gallery,
+            productId: created.id,
+          })),
+        });
+      }
 
       return created;
     });

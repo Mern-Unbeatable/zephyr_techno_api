@@ -73,7 +73,8 @@ app.use(cors(corsOptions));
 app.use(compression());
 
 // Body parsers
-app.use(express.json());
+// Raised limit so admin CSV imports (thousands of rows) fit in one request
+app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // User uploads (products, etc.)
