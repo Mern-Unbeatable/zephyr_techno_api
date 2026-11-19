@@ -28,6 +28,8 @@ import {
   adminSiteSettingsRoutes,
 } from './routes/site-settings.routes.js';
 import { blockPublicIfMaintenance } from './middleware/maintenance.middleware.js';
+import sitemapRoutes from './routes/sitemap.routes.js';
+import seoRoutes from './routes/seo.routes.js';
 import env from './config/env.js';
 
 const app = express();
@@ -99,6 +101,9 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+app.use(sitemapRoutes);
+app.use(seoRoutes);
 
 // Routes
 app.use('/api/auth', authRoutes);
