@@ -1,6 +1,4 @@
 # Environment
-.env
-.env.local
 .env.*.local
 
 # Dependencies
@@ -19,7 +17,6 @@ prisma/backups/*.json
 Thumbs.db
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
